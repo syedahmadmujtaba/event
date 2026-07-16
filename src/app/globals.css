@@ -1,26 +1,91 @@
 @import "tailwindcss";
 
+/*
+  Design system — light theme only.
+  Energetic & event-y: warm neutrals, a confident violet brand,
+  a coral accent for energy, and a status ramp (this app is all about status).
+  Values in OKLCH for perceptually even tints.
+*/
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Neutrals — warm-tinted, never cold slate */
+  --background: oklch(0.992 0.003 85);   /* warm off-white page */
+  --surface: oklch(1 0 0);               /* cards / panels */
+  --surface-muted: oklch(0.975 0.004 85);/* subtle fills, table headers */
+  --foreground: oklch(0.24 0.012 70);    /* warm near-black text */
+  --muted-foreground: oklch(0.52 0.012 70);
+  --border: oklch(0.918 0.006 80);
+  --border-strong: oklch(0.86 0.008 80);
+  --ring: oklch(0.53 0.20 280);
+
+  /* Brand — vivid violet */
+  --primary: oklch(0.53 0.21 280);
+  --primary-hover: oklch(0.47 0.21 280);
+  --primary-foreground: oklch(0.99 0.005 280);
+  --primary-tint: oklch(0.955 0.02 280); /* soft violet wash */
+
+  /* Accent — warm coral, energy pops */
+  --accent: oklch(0.68 0.18 34);
+  --accent-foreground: oklch(0.99 0.01 34);
+  --accent-tint: oklch(0.96 0.03 40);
+
+  /* Status ramp — pill bg (tint) + text (ink) pairs */
+  --status-pending: oklch(0.55 0.13 75);
+  --status-pending-tint: oklch(0.96 0.05 85);
+  --status-verified: oklch(0.52 0.12 158);
+  --status-verified-tint: oklch(0.95 0.05 160);
+  --status-rejected: oklch(0.55 0.20 22);
+  --status-rejected-tint: oklch(0.96 0.03 25);
+  --status-info: oklch(0.53 0.13 245);
+  --status-info-tint: oklch(0.96 0.03 245);
+
+  --radius: 0.75rem;
 }
 
 @theme inline {
   --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-ring: var(--ring);
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-tint: var(--primary-tint);
+
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent-tint: var(--accent-tint);
+
+  --color-status-pending: var(--status-pending);
+  --color-status-pending-tint: var(--status-pending-tint);
+  --color-status-verified: var(--status-verified);
+  --color-status-verified-tint: var(--status-verified-tint);
+  --color-status-rejected: var(--status-rejected);
+  --color-status-rejected-tint: var(--status-rejected-tint);
+  --color-status-info: var(--status-info);
+  --color-status-info-tint: var(--status-info-tint);
+
+  --font-sans: var(--font-hanken), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-bricolage), var(--font-hanken), ui-sans-serif, sans-serif;
+
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 0.35rem);
+  --radius-2xl: calc(var(--radius) + 0.75rem);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Display font for headings by default */
+h1, h2, h3, .font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
 }
