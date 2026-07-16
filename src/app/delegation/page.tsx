@@ -11,6 +11,7 @@ import {
   teamMembers,
   eventFeeRules,
   payments,
+  credentials,
 } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
 import {
@@ -63,15 +64,29 @@ async function loadBundle(regId: string, schoolId: string, eventId: string) {
         .innerJoin(participants, eq(participants.id, teamMembers.participantId))
         .where(inArray(teamMembers.teamId, teamRows.map((t) => t.id)))
     : [];
-  const [feeRules, pays] = await Promise.all([
+  const [feeRules, pays, creds] = await Promise.all([
     db.select().from(eventFeeRules).where(eq(eventFeeRules.eventId, eventId)),
     db
       .select()
       .from(payments)
       .where(and(eq(payments.payerType, "delegation_registration"), eq(payments.payerId, regId)))
       .orderBy(desc(payments.createdAt)),
+    db.select().from(credentials).where(eq(credentials.eventId, eventId)),
   ]);
-  return { regId, parts, acts, regRows, teamRows, memberRows, feeRules, latestPayment: pays[0] };
+  // Credentials for this delegation: its official card + its participants'.
+  const partIdSet = new Set(partIds);
+  const nameById = new Map(parts.map((p) => [p.id, p.name]));
+  const myCreds = creds
+    .filter(
+      (c) =>
+        (c.holderType === "delegation_registration" && c.holderId === regId) ||
+        (c.holderType === "participant" && partIdSet.has(c.holderId)),
+    )
+    .map((c) => ({
+      token: c.qrToken,
+      name: c.holderType === "participant" ? nameById.get(c.holderId) ?? "—" : "Delegation card",
+    }));
+  return { regId, parts, acts, regRows, teamRows, memberRows, feeRules, latestPayment: pays[0], myCreds };
 }
 
 export default async function DelegationPage() {
@@ -304,6 +319,26 @@ export default async function DelegationPage() {
                     </form>
                   )}
               </section>
+
+              {/* Issued credentials (FR-17) */}
+              {b.myCreds.length > 0 && (
+                <section className="space-y-2">
+                  <h3 className="text-sm font-semibold">Credentials</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {b.myCreds.map((c) => (
+                      <a
+                        key={c.token}
+                        href={`/credential/${c.token}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1 text-sm hover:border-primary hover:text-primary"
+                      >
+                        {c.name}
+                      </a>
+                    ))}
+                  </div>
+                </section>
+              )}
             </CardContent>
           </Card>
         );

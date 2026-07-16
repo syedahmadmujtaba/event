@@ -227,6 +227,23 @@ export const teamMembers = pgTable(
   (t) => [unique().on(t.teamId, t.participantId)],
 );
 
+// Issued QR credential (FR-16/17/18). Polymorphic holder, scoped to one event.
+// qrToken is the opaque value the QR encodes → /credential/{token}.
+export const credentials = pgTable(
+  "credentials",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    holderType: text("holder_type").notNull(), // participant | delegation_registration | visitor_ticket
+    holderId: uuid("holder_id").notNull(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    qrToken: text("qr_token").notNull().unique(),
+    issuedAt: timestamp("issued_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique().on(t.holderType, t.holderId, t.eventId)], // one card per holder per event
+);
+
 // Proof-of-payment (FR-13/14/15). Polymorphic payer so host-student registrations
 // and visitor tickets reuse it later. slipRef is a storage reference, never a
 // public URL — the file is served through a permission-gated route (NFR-3).
