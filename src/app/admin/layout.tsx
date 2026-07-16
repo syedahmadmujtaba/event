@@ -1,5 +1,6 @@
+import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/admin/sidebar";
-import { requireUser } from "@/lib/auth";
+import { requireUser, isAdmin } from "@/lib/auth";
 import { logout } from "@/lib/auth-actions";
 import { LogOut } from "lucide-react";
 
@@ -17,6 +18,7 @@ export default async function AdminLayout({
   children: React.ReactNode;
 }) {
   const user = await requireUser();
+  if (!isAdmin(user)) redirect("/delegation");
 
   return (
     <div className="flex min-h-screen">

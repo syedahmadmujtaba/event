@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   CalendarDays,
   Users,
+  UserCog,
   ReceiptText,
   Swords,
   IdCard,
@@ -20,6 +21,7 @@ const NAV = [
   { href: "/admin/payments", label: "Payments", icon: ReceiptText },
   { href: "/admin/matches", label: "Matches", icon: Swords },
   { href: "/admin/credentials", label: "Credentials", icon: IdCard },
+  { href: "/admin/users", label: "Users", icon: UserCog },
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ];
 

@@ -67,6 +67,17 @@ export function can(user: CurrentUser, permission: Permission) {
   return user.permissions.has(permission);
 }
 
+// Any permission other than the coordinator's own-delegation one grants admin access.
+export function isAdmin(user: CurrentUser) {
+  for (const p of user.permissions) if (p !== "delegation.self") return true;
+  return false;
+}
+
+/** Where a user lands after login / when hitting the wrong area. */
+export function homePath(user: CurrentUser) {
+  return isAdmin(user) ? "/admin" : "/delegation";
+}
+
 /** Redirects to /login when unauthenticated. */
 export async function requireUser(): Promise<CurrentUser> {
   const user = await getCurrentUser();

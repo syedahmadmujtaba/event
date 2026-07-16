@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { db } from "@/db";
 import { events } from "@/db/schema";
 import { requirePermission } from "@/lib/auth";
@@ -33,7 +34,12 @@ export default async function EventsPage() {
             <Card key={e.id}>
               <CardContent className="flex items-center justify-between pt-5">
                 <div>
-                  <p className="font-medium">{e.name}</p>
+                  <Link
+                    href={`/admin/events/${e.id}`}
+                    className="font-medium hover:text-primary hover:underline"
+                  >
+                    {e.name}
+                  </Link>
                   <p className="text-xs text-muted-foreground">
                     {e.type ?? "—"}
                     {e.startDate ? ` · ${e.startDate}` : ""}

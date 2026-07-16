@@ -5,7 +5,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { users, roles, userRoles } from "@/db/schema";
 import { hashPassword, verifyPassword } from "./password";
-import { createSession, destroySession, userCount } from "./auth";
+import { createSession, destroySession, userCount, getCurrentUser, homePath } from "./auth";
 import { ALL_PERMISSIONS } from "./permissions";
 
 export type AuthState = { error?: string };
@@ -68,7 +68,8 @@ export async function login(
   if (!user || !ok) return { error: "Incorrect email or password." };
 
   await createSession(user.id);
-  redirect("/admin");
+  const current = await getCurrentUser();
+  redirect(current ? homePath(current) : "/admin");
 }
 
 export async function logout() {
