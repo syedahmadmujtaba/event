@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import {
   delegationRegistrations,
@@ -9,6 +9,8 @@ import {
   registrations,
   teams,
   teamMembers,
+  eventFeeRules,
+  payments,
 } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
 import {
@@ -17,12 +19,18 @@ import {
   createTeam,
   addTeamMember,
 } from "@/lib/coordinator-actions";
+import { submitDelegationPayment } from "@/lib/payment-actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge, StatusBadge } from "@/components/ui/badge";
 
 export const dynamic = "force-dynamic";
+
+const PAYER_LABELS: Record<string, string> = {
+  delegation_registration: "Delegation registration",
+  delegation_student: "Per student",
+};
 
 async function loadBundle(regId: string, schoolId: string, eventId: string) {
   const [parts, acts] = await Promise.all([
@@ -55,7 +63,15 @@ async function loadBundle(regId: string, schoolId: string, eventId: string) {
         .innerJoin(participants, eq(participants.id, teamMembers.participantId))
         .where(inArray(teamMembers.teamId, teamRows.map((t) => t.id)))
     : [];
-  return { regId, parts, acts, regRows, teamRows, memberRows };
+  const [feeRules, pays] = await Promise.all([
+    db.select().from(eventFeeRules).where(eq(eventFeeRules.eventId, eventId)),
+    db
+      .select()
+      .from(payments)
+      .where(and(eq(payments.payerType, "delegation_registration"), eq(payments.payerId, regId)))
+      .orderBy(desc(payments.createdAt)),
+  ]);
+  return { regId, parts, acts, regRows, teamRows, memberRows, feeRules, latestPayment: pays[0] };
 }
 
 export default async function DelegationPage() {
@@ -244,6 +260,50 @@ export default async function DelegationPage() {
                   </form>
                 </section>
               )}
+
+              {/* Payment (FR-13) */}
+              <section className="space-y-3">
+                <h3 className="text-sm font-semibold">Payment</h3>
+                {b.feeRules.filter((f) => f.payerType in PAYER_LABELS).length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 text-sm">
+                    {b.feeRules
+                      .filter((f) => f.payerType in PAYER_LABELS)
+                      .map((f) => (
+                        <Badge key={f.id} tone="neutral">
+                          {PAYER_LABELS[f.payerType]}: Rs {f.amount.toLocaleString()}
+                          {f.day > 0 ? ` (day ${f.day})` : ""}
+                        </Badge>
+                      ))}
+                  </div>
+                )}
+
+                {b.latestPayment && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="text-muted-foreground">Latest slip:</span>
+                    <StatusBadge status={b.latestPayment.status} />
+                    {b.latestPayment.status === "rejected" && b.latestPayment.rejectionReason && (
+                      <span className="text-muted-foreground">
+                        — {b.latestPayment.rejectionReason}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {b.latestPayment?.status !== "submitted" &&
+                  b.latestPayment?.status !== "approved" && (
+                    <form action={submitDelegationPayment} className="flex flex-wrap items-center gap-2">
+                      <input type="hidden" name="regId" value={r.id} />
+                      <input
+                        type="file"
+                        name="slip"
+                        accept="image/png,image/jpeg,image/webp,application/pdf"
+                        required
+                        className="text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-primary-tint file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-primary"
+                      />
+                      <Button size="sm">Upload slip</Button>
+                    </form>
+                  )}
+              </section>
             </CardContent>
           </Card>
         );

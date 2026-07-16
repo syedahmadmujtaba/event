@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   delegationRegistrations,
@@ -10,6 +10,7 @@ import {
   registrations,
   teams,
   teamMembers,
+  events,
 } from "@/db/schema";
 import { requireUser } from "./auth";
 
@@ -69,6 +70,26 @@ export async function registerParticipant(formData: FormData) {
   const activityId = String(formData.get("activityId") ?? "");
   if (!(await activityInEvent(activityId, reg.eventId))) return;
   if (!(await participantInSchool(participantId, reg.schoolId))) return;
+
+  // Enforce the per-event activity cap (FR-3a). null = no cap.
+  const [ev] = await db
+    .select({ cap: events.maxActivitiesPerParticipant })
+    .from(events)
+    .where(eq(events.id, reg.eventId));
+  if (ev?.cap != null) {
+    const [{ n }] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(registrations)
+      .innerJoin(activities, eq(activities.id, registrations.activityId))
+      .where(
+        and(
+          eq(registrations.participantId, participantId),
+          eq(activities.eventId, reg.eventId),
+        ),
+      );
+    if (n >= ev.cap) return; // at/over the cap — reject
+  }
+
   await db
     .insert(registrations)
     .values({ participantId, activityId })

@@ -4,6 +4,7 @@ import {
   text,
   timestamp,
   date,
+  integer,
   jsonb,
   boolean,
   unique,
@@ -85,10 +86,31 @@ export const events = pgTable("events", {
   startDate: date("start_date"),
   endDate: date("end_date"),
   status: text("status").notNull().default("draft"), // draft | open | closed
+  maxActivitiesPerParticipant: integer("max_activities_per_participant"), // null = no cap (FR-3a)
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
 });
+
+// Organizer-set fee per payer type (FR-3). Amount in whole rupees.
+// day 0 = flat event fee; day 1,2,… = per-day fee for multi-day events.
+// ponytail: integer rupees; switch to paisa if sub-rupee fees ever appear.
+export const eventFeeRules = pgTable(
+  "event_fee_rules",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    payerType: text("payer_type").notNull(), // host_student | delegation_student | delegation_registration | visitor
+    amount: integer("amount").notNull(),
+    day: integer("day").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [unique().on(t.eventId, t.payerType, t.day)],
+);
 
 // Reusable org record (NFR-1) — one school participates across many events.
 export const schools = pgTable(
@@ -204,3 +226,20 @@ export const teamMembers = pgTable(
   },
   (t) => [unique().on(t.teamId, t.participantId)],
 );
+
+// Proof-of-payment (FR-13/14/15). Polymorphic payer so host-student registrations
+// and visitor tickets reuse it later. slipRef is a storage reference, never a
+// public URL — the file is served through a permission-gated route (NFR-3).
+export const payments = pgTable("payments", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  payerType: text("payer_type").notNull(), // delegation_registration | registration | visitor_ticket
+  payerId: uuid("payer_id").notNull(),
+  slipRef: text("slip_ref").notNull(),
+  status: text("status").notNull().default("submitted"), // submitted | approved | rejected
+  rejectionReason: text("rejection_reason"),
+  reviewedBy: uuid("reviewed_by").references(() => users.id),
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
