@@ -50,6 +50,12 @@ export default async function LoginPage({
           Register your delegation
         </Link>
       </p>
+      <p className="mt-1 text-center text-sm text-muted-foreground">
+        Host student?{" "}
+        <Link href="/student/login" className="font-medium text-primary hover:underline">
+          Sign in with roll number
+        </Link>
+      </p>
     </AuthShell>
   );
 }

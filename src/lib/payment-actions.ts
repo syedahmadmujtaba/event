@@ -7,7 +7,7 @@ import { payments, delegationRegistrations, users } from "@/db/schema";
 import { requireUser, requirePermission } from "./auth";
 import { uploadSlip } from "./storage";
 import { sendMail } from "./mailer";
-import { issueForDelegation } from "./credentials";
+import { issueForDelegation, issueParticipant } from "./credentials";
 
 const ALLOWED = new Set(["image/png", "image/jpeg", "image/webp", "application/pdf"]);
 const MAX_BYTES = 5 * 1024 * 1024;
@@ -60,9 +60,12 @@ async function decide(paymentId: string, status: "approved" | "rejected", reason
     })
     .where(eq(payments.id, paymentId));
 
-  // On approval, issue QR credentials for the delegation + its participants (FR-16).
+  // On approval, issue QR credentials (FR-16).
   if (status === "approved" && pay.payerType === "delegation_registration") {
     await issueForDelegation(pay.payerId);
+  }
+  if (status === "approved" && pay.payerType === "participant" && pay.eventId) {
+    await issueParticipant(pay.payerId, pay.eventId);
   }
 
   // Notify the delegation coordinator (FR-15/27). Other payer types wired later.

@@ -49,3 +49,11 @@ export async function issueForDelegation(regId: string) {
 
   await db.insert(credentials).values(rows).onConflictDoNothing();
 }
+
+/** Issue a single participant credential (host-student path). Idempotent. */
+export async function issueParticipant(participantId: string, eventId: string) {
+  await db
+    .insert(credentials)
+    .values({ holderType: "participant", holderId: participantId, eventId, qrToken: token() })
+    .onConflictDoNothing();
+}

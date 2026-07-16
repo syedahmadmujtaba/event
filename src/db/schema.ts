@@ -52,6 +52,30 @@ export const userRoles = pgTable(
   (t) => [unique().on(t.userId, t.roleId, t.eventId)],
 );
 
+// Host-school student master roster (FR-9). Reused across events (NFR-1).
+// Authenticates by rollNumber + CNIC (lower-security, rate-limited — NFR-4).
+export const hostStudents = pgTable("host_students", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  rollNumber: text("roll_number").notNull().unique(),
+  cnic: text("cnic").notNull(),
+  name: text("name").notNull(),
+  className: text("class_name"),
+  participantId: uuid("participant_id").references(() => participants.id, {
+    onDelete: "set null",
+  }), // created lazily on first registration
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Separate session table for host students — distinct, narrower auth from admins.
+export const hostSessions = pgTable("host_sessions", {
+  token: text("token").primaryKey(),
+  hostStudentId: uuid("host_student_id")
+    .notNull()
+    .references(() => hostStudents.id, { onDelete: "cascade" }),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 // Opaque server-side sessions — stdlib crypto token in an httpOnly cookie.
 // No JWT lib, trivially revocable.
 export const sessions = pgTable("sessions", {
@@ -249,8 +273,9 @@ export const credentials = pgTable(
 // public URL — the file is served through a permission-gated route (NFR-3).
 export const payments = pgTable("payments", {
   id: uuid("id").primaryKey().defaultRandom(),
-  payerType: text("payer_type").notNull(), // delegation_registration | registration | visitor_ticket
+  payerType: text("payer_type").notNull(), // delegation_registration | participant | visitor_ticket
   payerId: uuid("payer_id").notNull(),
+  eventId: uuid("event_id").references(() => events.id, { onDelete: "cascade" }), // scopes participant/visitor payments; null for delegation
   slipRef: text("slip_ref").notNull(),
   status: text("status").notNull().default("submitted"), // submitted | approved | rejected
   rejectionReason: text("rejection_reason"),

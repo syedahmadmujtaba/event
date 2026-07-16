@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { payments, delegationRegistrations, schools, events } from "@/db/schema";
+import { payments, delegationRegistrations, schools, events, participants } from "@/db/schema";
 import { requirePermission } from "@/lib/auth";
 import { approvePayment, rejectPayment } from "@/lib/payment-actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,20 +13,23 @@ export const dynamic = "force-dynamic";
 export default async function PaymentsPage() {
   await requirePermission("payment.verify");
 
-  // Submitted delegation payments awaiting verification. Other payer types
-  // (host student, visitor) join in with their slices.
-  const rows = await db
-    .select({
-      id: payments.id,
-      createdAt: payments.createdAt,
-      school: schools.name,
-      event: events.name,
-    })
-    .from(payments)
-    .innerJoin(delegationRegistrations, eq(delegationRegistrations.id, payments.payerId))
-    .innerJoin(schools, eq(schools.id, delegationRegistrations.schoolId))
-    .innerJoin(events, eq(events.id, delegationRegistrations.eventId))
-    .where(eq(payments.status, "submitted"));
+  // Submitted payments awaiting verification, across payer types.
+  const [delegationRows, participantRows] = await Promise.all([
+    db
+      .select({ id: payments.id, createdAt: payments.createdAt, who: schools.name, event: events.name })
+      .from(payments)
+      .innerJoin(delegationRegistrations, eq(delegationRegistrations.id, payments.payerId))
+      .innerJoin(schools, eq(schools.id, delegationRegistrations.schoolId))
+      .innerJoin(events, eq(events.id, delegationRegistrations.eventId))
+      .where(and(eq(payments.status, "submitted"), eq(payments.payerType, "delegation_registration"))),
+    db
+      .select({ id: payments.id, createdAt: payments.createdAt, who: participants.name, event: events.name })
+      .from(payments)
+      .innerJoin(participants, eq(participants.id, payments.payerId))
+      .innerJoin(events, eq(events.id, payments.eventId))
+      .where(and(eq(payments.status, "submitted"), eq(payments.payerType, "participant"))),
+  ]);
+  const rows = [...delegationRows, ...participantRows];
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -43,7 +46,7 @@ export default async function PaymentsPage() {
             <Card key={p.id}>
               <CardHeader className="flex flex-row items-start justify-between">
                 <div>
-                  <CardTitle className="text-base">{p.school}</CardTitle>
+                  <CardTitle className="text-base">{p.who}</CardTitle>
                   <p className="text-sm text-muted-foreground">
                     {p.event} · submitted {p.createdAt.toISOString().slice(0, 10)}
                   </p>

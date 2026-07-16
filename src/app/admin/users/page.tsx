@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { users, roles, userRoles, events } from "@/db/schema";
 import { requirePermission } from "@/lib/auth";
 import { createStaffUser, assignRole, removeRole } from "@/lib/user-actions";
+import { importHostStudents } from "@/lib/host-actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -137,6 +138,27 @@ export default async function UsersPage() {
               </div>
             </div>
             <Button>Create user</Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Import host students</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form action={importHostStudents} className="space-y-3">
+            <textarea
+              name="csv"
+              rows={5}
+              required
+              placeholder={"rollNumber,cnic,name,class\n22-118,3520212345671,Ali Raza,10-B"}
+              className="w-full rounded-lg border border-border bg-surface p-3 font-mono text-sm outline-none focus-visible:border-primary"
+            />
+            <p className="text-xs text-muted-foreground">
+              One student per line: <code>rollNumber,cnic,name,class</code>. Existing roll numbers are updated.
+            </p>
+            <Button>Import</Button>
           </form>
         </CardContent>
       </Card>

@@ -43,6 +43,13 @@
       "when": 1784228453291,
       "tag": "0005_brave_red_wolf",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1784228901693,
+      "tag": "0006_foamy_avengers",
+      "breakpoints": true
     }
   ]
 }
