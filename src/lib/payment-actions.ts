@@ -3,11 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { payments, delegationRegistrations, users } from "@/db/schema";
+import { payments, delegationRegistrations, users, visitorTickets, visitors } from "@/db/schema";
 import { requireUser, requirePermission } from "./auth";
 import { uploadSlip } from "./storage";
-import { sendMail } from "./mailer";
-import { issueForDelegation, issueParticipant } from "./credentials";
+import { sendMail, sendWhatsApp } from "./mailer";
+import { issueForDelegation, issueParticipant, issueVisitor } from "./credentials";
 
 const ALLOWED = new Set(["image/png", "image/jpeg", "image/webp", "application/pdf"]);
 const MAX_BYTES = 5 * 1024 * 1024;
@@ -66,6 +66,24 @@ async function decide(paymentId: string, status: "approved" | "rejected", reason
   }
   if (status === "approved" && pay.payerType === "participant" && pay.eventId) {
     await issueParticipant(pay.payerId, pay.eventId);
+  }
+  if (pay.payerType === "visitor_ticket" && pay.eventId) {
+    if (status === "approved") {
+      await db.update(visitorTickets).set({ status: "verified" }).where(eq(visitorTickets.id, pay.payerId));
+      await issueVisitor(pay.payerId, pay.eventId);
+    }
+    // Visitors give a phone, not an email → notify by WhatsApp (FR-26).
+    const [v] = await db
+      .select({ phone: visitors.phone })
+      .from(visitorTickets)
+      .innerJoin(visitors, eq(visitors.id, visitorTickets.visitorId))
+      .where(eq(visitorTickets.id, pay.payerId));
+    sendWhatsApp(
+      v?.phone,
+      status === "approved"
+        ? "Your Eventide entry ticket is verified."
+        : `Your payment was rejected.${reason ? ` Reason: ${reason}` : ""} Please re-upload.`,
+    );
   }
 
   // Notify the delegation coordinator (FR-15/27). Other payer types wired later.

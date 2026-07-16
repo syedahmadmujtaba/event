@@ -1,7 +1,7 @@
 import Image from "next/image";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { credentials, events, participants, delegationRegistrations, schools } from "@/db/schema";
+import { credentials, events, participants, delegationRegistrations, schools, visitorTickets, visitors } from "@/db/schema";
 import { qrDataUrl } from "@/lib/credentials";
 import { PrintButton } from "@/components/print-button";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +27,14 @@ async function holderName(holderType: string, holderId: string): Promise<string>
       .innerJoin(schools, eq(schools.id, delegationRegistrations.schoolId))
       .where(eq(delegationRegistrations.id, holderId));
     return s?.name ?? "Unknown";
+  }
+  if (holderType === "visitor_ticket") {
+    const [v] = await db
+      .select({ name: visitors.name })
+      .from(visitorTickets)
+      .innerJoin(visitors, eq(visitors.id, visitorTickets.visitorId))
+      .where(eq(visitorTickets.id, holderId));
+    return v?.name ?? "Unknown";
   }
   return "Unknown";
 }

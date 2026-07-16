@@ -97,7 +97,17 @@ export default async function StudentPage() {
           return (
             <Card key={ev.id}>
               <CardHeader>
-                <CardTitle>{ev.name}</CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle>{ev.name}</CardTitle>
+                  <a
+                    href={`/schedule/${ev.id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-sm font-medium text-primary hover:underline"
+                  >
+                    Schedule
+                  </a>
+                </div>
                 {ev.type && <p className="text-sm text-muted-foreground">{ev.type}</p>}
               </CardHeader>
               <CardContent className="space-y-5">

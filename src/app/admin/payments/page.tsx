@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { payments, delegationRegistrations, schools, events, participants } from "@/db/schema";
+import { payments, delegationRegistrations, schools, events, participants, visitorTickets, visitors } from "@/db/schema";
 import { requirePermission } from "@/lib/auth";
 import { approvePayment, rejectPayment } from "@/lib/payment-actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,7 +14,7 @@ export default async function PaymentsPage() {
   await requirePermission("payment.verify");
 
   // Submitted payments awaiting verification, across payer types.
-  const [delegationRows, participantRows] = await Promise.all([
+  const [delegationRows, participantRows, visitorRows] = await Promise.all([
     db
       .select({ id: payments.id, createdAt: payments.createdAt, who: schools.name, event: events.name })
       .from(payments)
@@ -28,8 +28,15 @@ export default async function PaymentsPage() {
       .innerJoin(participants, eq(participants.id, payments.payerId))
       .innerJoin(events, eq(events.id, payments.eventId))
       .where(and(eq(payments.status, "submitted"), eq(payments.payerType, "participant"))),
+    db
+      .select({ id: payments.id, createdAt: payments.createdAt, who: visitors.name, event: events.name })
+      .from(payments)
+      .innerJoin(visitorTickets, eq(visitorTickets.id, payments.payerId))
+      .innerJoin(visitors, eq(visitors.id, visitorTickets.visitorId))
+      .innerJoin(events, eq(events.id, payments.eventId))
+      .where(and(eq(payments.status, "submitted"), eq(payments.payerType, "visitor_ticket"))),
   ]);
-  const rows = [...delegationRows, ...participantRows];
+  const rows = [...delegationRows, ...participantRows, ...visitorRows];
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">

@@ -56,6 +56,12 @@ export default async function LoginPage({
           Sign in with roll number
         </Link>
       </p>
+      <p className="mt-1 text-center text-sm text-muted-foreground">
+        Attending as a guest?{" "}
+        <Link href="/visitor/register" className="font-medium text-primary hover:underline">
+          Buy entry ticket
+        </Link>
+      </p>
     </AuthShell>
   );
 }

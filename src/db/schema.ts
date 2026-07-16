@@ -251,6 +251,52 @@ export const teamMembers = pgTable(
   (t) => [unique().on(t.teamId, t.participantId)],
 );
 
+// A fixture within a competitive activity (FR-19/20/21). Sides are a team or an
+// individual participant. winnerSide records the outcome without a polymorphic FK.
+export const matches = pgTable("matches", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  activityId: uuid("activity_id")
+    .notNull()
+    .references(() => activities.id, { onDelete: "cascade" }),
+  sideAType: text("side_a_type").notNull(), // team | participant
+  sideAId: uuid("side_a_id").notNull(),
+  sideBType: text("side_b_type").notNull(),
+  sideBId: uuid("side_b_id").notNull(),
+  scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
+  venue: text("venue"),
+  status: text("status").notNull().default("scheduled"), // scheduled | ongoing | completed
+  result: text("result"), // free-form score
+  winnerSide: text("winner_side"), // a | b | draw
+  reviewedBy: uuid("reviewed_by").references(() => users.id),
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// A non-participating guest (FR-22). Reusable identity, tickets are per-event.
+export const visitors = pgTable("visitors", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  cnic: text("cnic").notNull(),
+  phone: text("phone"),
+  association: text("association"), // who they're attending with
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Entry pass tied to a visitor + event. token is the visitor's no-login access
+// key to their own ticket page (like a credential token).
+export const visitorTickets = pgTable("visitor_tickets", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  visitorId: uuid("visitor_id")
+    .notNull()
+    .references(() => visitors.id, { onDelete: "cascade" }),
+  eventId: uuid("event_id")
+    .notNull()
+    .references(() => events.id, { onDelete: "cascade" }),
+  token: text("token").notNull().unique(),
+  status: text("status").notNull().default("pending"), // pending | verified
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 // Issued QR credential (FR-16/17/18). Polymorphic holder, scoped to one event.
 // qrToken is the opaque value the QR encodes → /credential/{token}.
 export const credentials = pgTable(

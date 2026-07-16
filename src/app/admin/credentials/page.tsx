@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { credentials, events, participants, delegationRegistrations, schools } from "@/db/schema";
+import { credentials, events, participants, delegationRegistrations, schools, visitorTickets, visitors } from "@/db/schema";
 import { requirePermission } from "@/lib/auth";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -26,12 +26,15 @@ export default async function CredentialsPage() {
       event: events.name,
       pname: participants.name,
       sname: schools.name,
+      vname: visitors.name,
     })
     .from(credentials)
     .innerJoin(events, eq(events.id, credentials.eventId))
     .leftJoin(participants, eq(participants.id, credentials.holderId))
     .leftJoin(delegationRegistrations, eq(delegationRegistrations.id, credentials.holderId))
     .leftJoin(schools, eq(schools.id, delegationRegistrations.schoolId))
+    .leftJoin(visitorTickets, eq(visitorTickets.id, credentials.holderId))
+    .leftJoin(visitors, eq(visitors.id, visitorTickets.visitorId))
     .orderBy(events.name);
 
   return (
@@ -52,7 +55,7 @@ export default async function CredentialsPage() {
               <div key={r.token} className="flex items-center justify-between px-4 py-3">
                 <div>
                   <p className="text-sm font-medium">
-                    {r.type === "participant" ? r.pname : r.sname}
+                    {r.type === "participant" ? r.pname : r.type === "visitor_ticket" ? r.vname : r.sname}
                   </p>
                   <p className="text-xs text-muted-foreground">{r.event}</p>
                 </div>

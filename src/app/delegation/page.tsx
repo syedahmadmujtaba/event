@@ -158,7 +158,17 @@ export default async function DelegationPage() {
         return (
           <Card key={r.id}>
             <CardHeader>
-              <CardTitle>{r.school}</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle>{r.school}</CardTitle>
+                <a
+                  href={`/schedule/${r.eventId}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-sm font-medium text-primary hover:underline"
+                >
+                  Schedule
+                </a>
+              </div>
               <p className="text-sm text-muted-foreground">{r.event} · approved</p>
             </CardHeader>
             <CardContent className="space-y-6">

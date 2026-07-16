@@ -57,3 +57,11 @@ export async function issueParticipant(participantId: string, eventId: string) {
     .values({ holderType: "participant", holderId: participantId, eventId, qrToken: token() })
     .onConflictDoNothing();
 }
+
+/** Issue a visitor ticket credential. Idempotent. */
+export async function issueVisitor(ticketId: string, eventId: string) {
+  await db
+    .insert(credentials)
+    .values({ holderType: "visitor_ticket", holderId: ticketId, eventId, qrToken: token() })
+    .onConflictDoNothing();
+}
