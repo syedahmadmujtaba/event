@@ -2,7 +2,7 @@ import Link from "next/link";
 import { db } from "@/db";
 import { events } from "@/db/schema";
 import { requirePermission } from "@/lib/auth";
-import { createEvent, setEventStatus } from "@/lib/event-actions";
+import { createEvent, setEventStatus, hasEnded } from "@/lib/event-actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -29,7 +29,9 @@ export default async function EventsPage() {
 
       <div className="space-y-3">
         {rows.map((e) => {
-          const next = NEXT[e.status];
+          const ended = hasEnded(e.endDate);
+          // Past end date: block (re)opening; only allow closing an open one.
+          const next = ended && NEXT[e.status]?.to === "open" ? undefined : NEXT[e.status];
           return (
             <Card key={e.id}>
               <CardContent className="flex items-center justify-between pt-5">
@@ -48,6 +50,9 @@ export default async function EventsPage() {
                 </div>
                 <div className="flex items-center gap-3">
                   <StatusBadge status={e.status} />
+                  {ended && (
+                    <span className="text-xs font-medium text-muted-foreground">Ended</span>
+                  )}
                   {next && (
                     <form action={setEventStatus}>
                       <input type="hidden" name="eventId" value={e.id} />

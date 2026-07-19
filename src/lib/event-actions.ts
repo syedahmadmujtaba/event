@@ -27,11 +27,24 @@ export async function createEvent(formData: FormData) {
   revalidatePath("/admin/events");
 }
 
+/** True once the event's end date is past. endDate is a "YYYY-MM-DD" string, so
+ *  a lexical compare against today's date is correct. */
+export function hasEnded(endDate: string | null): boolean {
+  return !!endDate && endDate < new Date().toISOString().slice(0, 10);
+}
+
 export async function setEventStatus(formData: FormData) {
   await requirePermission("event.manage");
   const id = String(formData.get("eventId") ?? "");
   const status = String(formData.get("status") ?? "");
   if (!STATUSES.has(status)) return;
+
+  // Can't (re)open an event whose end date has passed. Closing is always allowed.
+  if (status === "open") {
+    const [ev] = await db.select({ endDate: events.endDate }).from(events).where(eq(events.id, id));
+    if (!ev || hasEnded(ev.endDate)) return;
+  }
+
   await db.update(events).set({ status }).where(eq(events.id, id));
   revalidatePath("/admin/events");
 }
