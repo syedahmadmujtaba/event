@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { events, activities, eventFeeRules } from "@/db/schema";
 import { requirePermission } from "./auth";
+import { hasEnded } from "./event";
 
 const STATUSES = new Set(["draft", "open", "closed"]);
 const PAYER_TYPES = new Set([
@@ -25,12 +26,6 @@ export async function createEvent(formData: FormData) {
     endDate: String(formData.get("endDate") ?? "") || null,
   });
   revalidatePath("/admin/events");
-}
-
-/** True once the event's end date is past. endDate is a "YYYY-MM-DD" string, so
- *  a lexical compare against today's date is correct. */
-export function hasEnded(endDate: string | null): boolean {
-  return !!endDate && endDate < new Date().toISOString().slice(0, 10);
 }
 
 export async function setEventStatus(formData: FormData) {
