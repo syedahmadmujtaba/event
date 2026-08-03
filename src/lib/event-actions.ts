@@ -5,9 +5,10 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { events, activities, eventFeeRules } from "@/db/schema";
 import { requirePermission } from "./auth";
-import { hasEnded } from "./event";
+import { hasEnded, REGISTRATION_TARGETS } from "./event";
 
 const STATUSES = new Set(["draft", "open", "closed"]);
+const TARGETS = new Set<string>(REGISTRATION_TARGETS);
 const PAYER_TYPES = new Set([
   "host_student",
   "delegation_student",
@@ -101,5 +102,19 @@ export async function deleteFeeRule(formData: FormData) {
   const id = String(formData.get("ruleId") ?? "");
   const eventId = String(formData.get("eventId") ?? "");
   await db.delete(eventFeeRules).where(eq(eventFeeRules.id, id));
+  revalidatePath(`/admin/events/${eventId}`);
+}
+
+export async function setRegistrationTargets(formData: FormData) {
+  await requirePermission("event.manage");
+  const eventId = String(formData.get("eventId") ?? "");
+  const targets = formData
+    .getAll("target")
+    .map(String)
+    .filter((t) => TARGETS.has(t));
+  await db
+    .update(events)
+    .set({ registerableBy: targets })
+    .where(eq(events.id, eventId));
   revalidatePath(`/admin/events/${eventId}`);
 }

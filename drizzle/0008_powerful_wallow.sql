@@ -1,0 +1,1 @@
+ALTER TABLE "events" ADD COLUMN "registerable_by" jsonb DEFAULT '["delegation","host_student","visitor"]'::jsonb NOT NULL;

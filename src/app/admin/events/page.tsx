@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { events } from "@/db/schema";
 import { requirePermission } from "@/lib/auth";
@@ -17,6 +18,20 @@ const NEXT: Record<string, { to: string; label: string }> = {
 
 export default async function EventsPage() {
   await requirePermission("event.manage");
+
+  // Self-heal: an event left "open" past its end date is no longer offered for
+  // registration (see openEventsFor) — flip its stored status to match reality.
+  const today = new Date().toISOString().slice(0, 10);
+  await db
+    .update(events)
+    .set({ status: "closed" })
+    .where(
+      and(
+        eq(events.status, "open"),
+        sql`${events.endDate} is not null and ${events.endDate} < ${today}`,
+      ),
+    );
+
   const rows = await db.select().from(events).orderBy(events.createdAt);
 
   return (

@@ -9,18 +9,26 @@ import {
   setActivityCap,
   createFeeRule,
   deleteFeeRule,
+  setRegistrationTargets,
 } from "@/lib/event-actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Trash2 } from "lucide-react";
+import { REGISTRATION_TARGETS } from "@/lib/event";
 
 const PAYER_LABELS: Record<string, string> = {
   host_student: "Host student",
   delegation_student: "Delegation student",
   delegation_registration: "Delegation registration",
   visitor: "Visitor",
+};
+
+const TARGET_LABELS: Record<string, string> = {
+  delegation: "Visiting school delegations",
+  host_student: "Host students",
+  visitor: "Visitors / spectators",
 };
 
 export const dynamic = "force-dynamic";
@@ -103,6 +111,38 @@ export default async function EventActivitiesPage({
               Team-based (coordinators form teams)
             </label>
             <Button>Add activity</Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Who can register</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form action={setRegistrationTargets} className="space-y-3">
+            <input type="hidden" name="eventId" value={eventId} />
+            <p className="text-sm text-muted-foreground">
+              Only selected groups will see this event. Untick a group and the
+              event disappears from their registration page.
+            </p>
+            <div className="space-y-2">
+              {REGISTRATION_TARGETS.map((t) => (
+                <label key={t} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    name="target"
+                    value={t}
+                    defaultChecked={(event.registerableBy ?? []).includes(t)}
+                    className="size-4 accent-[var(--primary)]"
+                  />
+                  {TARGET_LABELS[t]}
+                </label>
+              ))}
+            </div>
+            <Button size="sm" variant="outline">
+              Save
+            </Button>
           </form>
         </CardContent>
       </Card>

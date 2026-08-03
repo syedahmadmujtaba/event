@@ -110,6 +110,13 @@ export const events = pgTable("events", {
   startDate: date("start_date"),
   endDate: date("end_date"),
   status: text("status").notNull().default("draft"), // draft | open | closed
+  // Who may self-register for this event; an absent target hides the event from
+  // that surface entirely. Values: delegation | host_student | visitor.
+  registerableBy: jsonb("registerable_by").$type<string[]>().notNull().default([
+    "delegation",
+    "host_student",
+    "visitor",
+  ]),
   maxActivitiesPerParticipant: integer("max_activities_per_participant"), // null = no cap (FR-3a)
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()

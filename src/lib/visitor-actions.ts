@@ -3,10 +3,11 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { randomBytes } from "crypto";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { visitors, visitorTickets, payments, events } from "@/db/schema";
+import { visitors, visitorTickets, payments } from "@/db/schema";
 import { uploadSlip } from "./storage";
+import { eventOpenFor } from "./event";
 import type { AuthState } from "./auth-actions";
 
 const ALLOWED = new Set(["image/png", "image/jpeg", "image/webp", "application/pdf"]);
@@ -21,11 +22,9 @@ export async function registerVisitor(_prev: AuthState, formData: FormData): Pro
   const association = String(formData.get("association") ?? "").trim();
   if (!eventId || !name || !cnic) return { error: "Name, CNIC, and event are required." };
 
-  const [event] = await db
-    .select({ id: events.id })
-    .from(events)
-    .where(and(eq(events.id, eventId), eq(events.status, "open")));
-  if (!event) return { error: "That event is not open." };
+  if (!(await eventOpenFor(eventId, "visitor"))) {
+    return { error: "That event is not open for visitor entry." };
+  }
 
   const [visitor] = await db
     .insert(visitors)

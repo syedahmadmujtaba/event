@@ -1,19 +1,14 @@
 import Link from "next/link";
-import { eq } from "drizzle-orm";
-import { db } from "@/db";
-import { events } from "@/db/schema";
 import { AuthForm } from "@/components/auth-form";
 import { AuthShell } from "@/components/auth-shell";
 import { Input, Label } from "@/components/ui/input";
 import { registerDelegation } from "@/lib/delegation-actions";
+import { openEventsFor } from "@/lib/event";
 
 export const dynamic = "force-dynamic";
 
 export default async function RegisterPage() {
-  const openEvents = await db
-    .select({ id: events.id, name: events.name })
-    .from(events)
-    .where(eq(events.status, "open"));
+  const openEvents = await openEventsFor("delegation");
 
   return (
     <AuthShell

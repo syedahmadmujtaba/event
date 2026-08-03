@@ -1,18 +1,13 @@
-import { eq } from "drizzle-orm";
-import { db } from "@/db";
-import { events } from "@/db/schema";
 import { AuthForm } from "@/components/auth-form";
 import { AuthShell } from "@/components/auth-shell";
 import { Input, Label } from "@/components/ui/input";
 import { registerVisitor } from "@/lib/visitor-actions";
+import { openEventsFor } from "@/lib/event";
 
 export const dynamic = "force-dynamic";
 
 export default async function VisitorRegisterPage() {
-  const openEvents = await db
-    .select({ id: events.id, name: events.name })
-    .from(events)
-    .where(eq(events.status, "open"));
+  const openEvents = await openEventsFor("visitor");
 
   return (
     <AuthShell title="Visitor entry" subtitle="Register to attend, then upload your payment slip.">

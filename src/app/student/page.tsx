@@ -2,7 +2,6 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 import { LogOut } from "lucide-react";
 import { db } from "@/db";
 import {
-  events,
   activities,
   registrations,
   payments,
@@ -11,6 +10,7 @@ import {
 } from "@/db/schema";
 import { requireHostStudent } from "@/lib/host-auth";
 import { hostLogout, hostRegisterActivity, hostSubmitPayment } from "@/lib/host-actions";
+import { openEventsFor } from "@/lib/event";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge, StatusBadge } from "@/components/ui/badge";
@@ -21,7 +21,7 @@ export default async function StudentPage() {
   const student = await requireHostStudent();
   const pid = student.participantId;
 
-  const openEvents = await db.select().from(events).where(eq(events.status, "open"));
+  const openEvents = await openEventsFor("host_student");
   const acts = openEvents.length
     ? await db
         .select()

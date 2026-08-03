@@ -9,13 +9,13 @@ import {
   roles,
   userRoles,
   schools,
-  events,
   delegationRegistrations,
 } from "@/db/schema";
 import { hashPassword } from "./password";
 import { requirePermission } from "./auth";
 import { createVerificationUrl } from "./email-verification";
 import { sendMail } from "./mailer";
+import { eventOpenFor } from "./event";
 import type { AuthState } from "./auth-actions";
 
 /** Public delegation self-registration for one open event (FR-4). */
@@ -34,12 +34,10 @@ export async function registerDelegation(
     return { error: "Fill every field; password must be at least 8 characters." };
   }
 
-  // Re-check the event is open — never trust the dropdown.
-  const [event] = await db
-    .select({ id: events.id })
-    .from(events)
-    .where(and(eq(events.id, eventId), eq(events.status, "open")));
-  if (!event) return { error: "That event is not open for registration." };
+  // Re-check the event is open and accepting delegations — never trust the dropdown.
+  if (!(await eventOpenFor(eventId, "delegation"))) {
+    return { error: "That event is not open for delegation registration." };
+  }
 
   const [existingUser] = await db
     .select({ id: users.id })

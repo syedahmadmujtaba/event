@@ -57,6 +57,13 @@
       "when": 1784229489416,
       "tag": "0007_windy_roulette",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1785744292369,
+      "tag": "0008_powerful_wallow",
+      "breakpoints": true
     }
   ]
 }

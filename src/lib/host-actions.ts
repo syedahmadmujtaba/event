@@ -2,9 +2,9 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { hostStudents, participants, activities, events, registrations, payments } from "@/db/schema";
+import { hostStudents, participants, activities, registrations, payments } from "@/db/schema";
 import { requirePermission } from "./auth";
 import {
   hostLogin,
@@ -14,6 +14,7 @@ import {
   hostSchoolId,
 } from "./host-auth";
 import { atActivityCap } from "./registration";
+import { eventOpenFor } from "./event";
 import { uploadSlip } from "./storage";
 import type { AuthState } from "./auth-actions";
 
@@ -74,13 +75,13 @@ export async function hostRegisterActivity(formData: FormData) {
   const ctx = await ensureParticipant();
   if (!ctx) return;
 
-  // Activity must belong to an OPEN event.
+  // Activity must belong to an OPEN event accepting host students (not ended).
   const [a] = await db
     .select({ eventId: activities.eventId })
     .from(activities)
-    .innerJoin(events, eq(events.id, activities.eventId))
-    .where(and(eq(activities.id, activityId), eq(events.status, "open")));
+    .where(eq(activities.id, activityId));
   if (!a) return;
+  if (!(await eventOpenFor(a.eventId, "host_student"))) return;
   if (await atActivityCap(ctx.participantId, a.eventId)) return; // FR-3a
 
   await db
