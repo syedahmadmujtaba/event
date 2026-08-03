@@ -1,3 +1,7 @@
+"use client";
+
+import { useFormStatus } from "react-dom";
+import { Loader2 } from "lucide-react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
@@ -29,8 +33,29 @@ export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof button> {}
 
-export function Button({ className, variant, size, ...props }: ButtonProps) {
+export function Button({
+  className,
+  variant,
+  size,
+  disabled,
+  children,
+  ...props
+}: ButtonProps) {
+  // Lock the button while its owning <form action> is pending, so a double/triple
+  // click can't fire the server action repeatedly. Safe to call anywhere — outside
+  // a pending form `pending` is always false.
+  const { pending } = useFormStatus();
+  const busy = pending && !disabled;
+
   return (
-    <button className={cn(button({ variant, size }), className)} {...props} />
+    <button
+      className={cn(button({ variant, size }), className)}
+      disabled={disabled || busy}
+      aria-busy={busy || undefined}
+      {...props}
+    >
+      {busy && <Loader2 className="size-4 animate-spin" />}
+      {children}
+    </button>
   );
 }

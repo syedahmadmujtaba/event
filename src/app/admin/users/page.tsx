@@ -71,13 +71,15 @@ export default async function UsersPage() {
                       </Badge>
                       <form action={removeRole}>
                         <input type="hidden" name="userRoleId" value={a.id} />
-                        <button
+                        <Button
                           type="submit"
+                          size="icon"
+                          variant="ghost"
                           title="Remove role"
-                          className="grid size-5 place-items-center rounded text-muted-foreground hover:bg-surface-muted hover:text-status-rejected"
+                          className="size-5 text-muted-foreground hover:text-status-rejected [&_svg]:size-3.5"
                         >
                           <X className="size-3.5" />
-                        </button>
+                        </Button>
                       </form>
                     </span>
                   ))}
