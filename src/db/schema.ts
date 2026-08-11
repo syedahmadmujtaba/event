@@ -8,6 +8,7 @@ import {
   jsonb,
   boolean,
   unique,
+  index,
 } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
@@ -49,7 +50,10 @@ export const userRoles = pgTable(
       .references(() => roles.id, { onDelete: "cascade" }),
     eventId: uuid("event_id"), // null → global scope
   },
-  (t) => [unique().on(t.userId, t.roleId, t.eventId)],
+  (t) => [
+    unique().on(t.userId, t.roleId, t.eventId),
+    index("user_roles_user_id_idx").on(t.userId),
+  ],
 );
 
 // Host-school student master roster (FR-9). Reused across events (NFR-1).
@@ -124,8 +128,7 @@ export const events = pgTable("events", {
 });
 
 // Organizer-set fee per payer type (FR-3). Amount in whole rupees.
-// day 0 = flat event fee; day 1,2,… = per-day fee for multi-day events.
-// ponytail: integer rupees; switch to paisa if sub-rupee fees ever appear.
+// One flat fee per payer type per event (no per-day fees).
 export const eventFeeRules = pgTable(
   "event_fee_rules",
   {
@@ -135,12 +138,14 @@ export const eventFeeRules = pgTable(
       .references(() => events.id, { onDelete: "cascade" }),
     payerType: text("payer_type").notNull(), // host_student | delegation_student | delegation_registration | visitor
     amount: integer("amount").notNull(),
-    day: integer("day").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
   },
-  (t) => [unique().on(t.eventId, t.payerType, t.day)],
+  (t) => [
+    unique().on(t.eventId, t.payerType),
+    index("event_fee_rules_event_id_idx").on(t.eventId),
+  ],
 );
 
 // Reusable org record (NFR-1) — one school participates across many events.
@@ -180,7 +185,12 @@ export const delegationRegistrations = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (t) => [unique().on(t.schoolId, t.eventId)], // one registration per school per event
+  (t) => [
+    unique().on(t.schoolId, t.eventId), // one registration per school per event
+    index("delegation_registrations_coordinator_user_id_idx").on(t.coordinatorUserId),
+    index("delegation_registrations_school_id_idx").on(t.schoolId),
+    index("delegation_registrations_event_id_idx").on(t.eventId),
+  ],
 );
 
 // A unit within an event (FR-2). teamBased → coordinators form teams for it.
@@ -190,12 +200,12 @@ export const activities = pgTable("activities", {
     .notNull()
     .references(() => events.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
-  kind: text("kind").notNull().default("competitive"), // competitive | noncompetitive
+  price: integer("price").notNull().default(0), // per-participant fee in whole rupees
   teamBased: boolean("team_based").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
-});
+}, (t) => [index("activities_event_id_idx").on(t.eventId)]);
 
 // A student. Belongs to a school, reused across events/years (NFR-1).
 export const participants = pgTable("participants", {
@@ -226,7 +236,11 @@ export const registrations = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (t) => [unique().on(t.participantId, t.activityId)],
+  (t) => [
+    unique().on(t.participantId, t.activityId),
+    index("registrations_participant_id_idx").on(t.participantId),
+    index("registrations_activity_id_idx").on(t.activityId),
+  ],
 );
 
 // A roster from one school for a team-based activity (FR-8).
@@ -242,7 +256,10 @@ export const teams = pgTable("teams", {
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
-});
+}, (t) => [
+  index("teams_activity_id_idx").on(t.activityId),
+  index("teams_school_id_idx").on(t.schoolId),
+]);
 
 export const teamMembers = pgTable(
   "team_members",
@@ -255,7 +272,10 @@ export const teamMembers = pgTable(
       .notNull()
       .references(() => participants.id, { onDelete: "cascade" }),
   },
-  (t) => [unique().on(t.teamId, t.participantId)],
+  (t) => [
+    unique().on(t.teamId, t.participantId),
+    index("team_members_team_id_idx").on(t.teamId),
+  ],
 );
 
 // A fixture within a competitive activity (FR-19/20/21). Sides are a team or an
@@ -277,7 +297,7 @@ export const matches = pgTable("matches", {
   reviewedBy: uuid("reviewed_by").references(() => users.id),
   reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [index("matches_activity_id_idx").on(t.activityId)]);
 
 // A non-participating guest (FR-22). Reusable identity, tickets are per-event.
 export const visitors = pgTable("visitors", {
@@ -318,7 +338,11 @@ export const credentials = pgTable(
     qrToken: text("qr_token").notNull().unique(),
     issuedAt: timestamp("issued_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [unique().on(t.holderType, t.holderId, t.eventId)], // one card per holder per event
+  (t) => [
+    unique().on(t.holderType, t.holderId, t.eventId), // one card per holder per event
+    index("credentials_event_id_idx").on(t.eventId),
+    index("credentials_holder_id_idx").on(t.holderId),
+  ],
 );
 
 // Proof-of-payment (FR-13/14/15). Polymorphic payer so host-student registrations
@@ -337,4 +361,7 @@ export const payments = pgTable("payments", {
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
-});
+}, (t) => [
+  index("payments_payer_id_idx").on(t.payerId),
+  index("payments_status_idx").on(t.status),
+]);

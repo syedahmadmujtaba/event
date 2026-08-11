@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
   delegationRegistrations,
@@ -34,45 +34,43 @@ const PAYER_LABELS: Record<string, string> = {
 };
 
 async function loadBundle(regId: string, schoolId: string, eventId: string) {
-  const [parts, acts] = await Promise.all([
-    db.select().from(participants).where(eq(participants.schoolId, schoolId)),
-    db.select().from(activities).where(eq(activities.eventId, eventId)),
-  ]);
-  const partIds = parts.map((p) => p.id);
-  const regRows = partIds.length
-    ? await db
+  // All queries fire in parallel (one round-trip stage) — joins replace the
+  // previous id-driven sub-queries, so nothing waits on a prior query's result.
+  const [parts, acts, regRows, teamRows, memberRows, feeRules, pays, creds] =
+    await Promise.all([
+      db.select().from(participants).where(eq(participants.schoolId, schoolId)),
+      db.select().from(activities).where(eq(activities.eventId, eventId)),
+      db
         .select({
           participantId: registrations.participantId,
           activityId: registrations.activityId,
           status: registrations.status,
         })
         .from(registrations)
-        .where(inArray(registrations.participantId, partIds))
-    : [];
-  // Teams are per-school; every team of this school for this event's activities.
-  const actIds = acts.map((a) => a.id);
-  const teamRows = actIds.length
-    ? await db
-        .select()
+        .innerJoin(participants, eq(participants.id, registrations.participantId))
+        .innerJoin(activities, eq(activities.id, registrations.activityId))
+        .where(and(eq(participants.schoolId, schoolId), eq(activities.eventId, eventId))),
+      db
+        .select({ id: teams.id, activityId: teams.activityId, name: teams.name })
         .from(teams)
-        .where(and(eq(teams.schoolId, schoolId), inArray(teams.activityId, actIds)))
-    : [];
-  const memberRows = teamRows.length
-    ? await db
+        .innerJoin(activities, eq(activities.id, teams.activityId))
+        .where(and(eq(teams.schoolId, schoolId), eq(activities.eventId, eventId))),
+      db
         .select({ teamId: teamMembers.teamId, name: participants.name })
         .from(teamMembers)
+        .innerJoin(teams, eq(teams.id, teamMembers.teamId))
+        .innerJoin(activities, eq(activities.id, teams.activityId))
         .innerJoin(participants, eq(participants.id, teamMembers.participantId))
-        .where(inArray(teamMembers.teamId, teamRows.map((t) => t.id)))
-    : [];
-  const [feeRules, pays, creds] = await Promise.all([
-    db.select().from(eventFeeRules).where(eq(eventFeeRules.eventId, eventId)),
-    db
-      .select()
-      .from(payments)
-      .where(and(eq(payments.payerType, "delegation_registration"), eq(payments.payerId, regId)))
-      .orderBy(desc(payments.createdAt)),
-    db.select().from(credentials).where(eq(credentials.eventId, eventId)),
-  ]);
+        .where(and(eq(teams.schoolId, schoolId), eq(activities.eventId, eventId))),
+      db.select().from(eventFeeRules).where(eq(eventFeeRules.eventId, eventId)),
+      db
+        .select()
+        .from(payments)
+        .where(and(eq(payments.payerType, "delegation_registration"), eq(payments.payerId, regId)))
+        .orderBy(desc(payments.createdAt)),
+      db.select().from(credentials).where(eq(credentials.eventId, eventId)),
+    ]);
+  const partIds = parts.map((p) => p.id);
   // Credentials for this delegation: its official card + its participants'.
   const partIdSet = new Set(partIds);
   const nameById = new Map(parts.map((p) => [p.id, p.name]));
@@ -296,7 +294,6 @@ export default async function DelegationPage() {
                       .map((f) => (
                         <Badge key={f.id} tone="neutral">
                           {PAYER_LABELS[f.payerType]}: Rs {f.amount.toLocaleString()}
-                          {f.day > 0 ? ` (day ${f.day})` : ""}
                         </Badge>
                       ))}
                   </div>

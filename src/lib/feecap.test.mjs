@@ -1,4 +1,4 @@
-// Self-check: activity-cap count query + fee-rule unique(event,payer,day).
+// Self-check: activity-cap count query + fee-rule unique(event,payer).
 // Run: node --env-file=.env src/lib/feecap.test.mjs
 import assert from "node:assert";
 import { Pool } from "pg";
@@ -34,10 +34,10 @@ try {
   assert.equal(n, 2, "expected 2 registrations counted against the cap");
   assert.ok(n >= 2, "cap of 2 reached → guard rejects the 3rd");
 
-  // Fee-rule uniqueness on (event, payer, day).
-  await q("insert into event_fee_rules (event_id,payer_type,amount,day) values ($1,'visitor',500,0)", [ev.id]);
+  // Fee-rule uniqueness on (event, payer).
+  await q("insert into event_fee_rules (event_id,payer_type,amount) values ($1,'visitor',500)", [ev.id]);
   await assert.rejects(
-    q("insert into event_fee_rules (event_id,payer_type,amount,day) values ($1,'visitor',999,0)", [ev.id]),
+    q("insert into event_fee_rules (event_id,payer_type,amount) values ($1,'visitor',999)", [ev.id]),
     /unique|duplicate/i,
   );
 

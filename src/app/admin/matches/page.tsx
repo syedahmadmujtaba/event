@@ -19,28 +19,51 @@ export default async function MatchesPage() {
     .select({ id: activities.id, name: activities.name, teamBased: activities.teamBased, event: events.name })
     .from(activities)
     .innerJoin(events, eq(events.id, activities.eventId))
-    .where(eq(activities.kind, "competitive"))
     .orderBy(events.name);
 
   const compIds = comps.map((c) => c.id);
-  const allMatches = compIds.length
-    ? await db.select().from(matches).where(inArray(matches.activityId, compIds))
-    : [];
+  // Batch everything into a single parallel stage (no per-activity loop).
+  const [allMatches, allTeams, allRegs] = await Promise.all([
+    compIds.length
+      ? db.select().from(matches).where(inArray(matches.activityId, compIds))
+      : Promise.resolve([]),
+    compIds.length
+      ? db
+          .select({ id: teams.id, activityId: teams.activityId, name: teams.name })
+          .from(teams)
+          .where(inArray(teams.activityId, compIds))
+      : Promise.resolve([]),
+    compIds.length
+      ? db
+          .select({
+            participantId: registrations.participantId,
+            activityId: registrations.activityId,
+            name: participants.name,
+          })
+          .from(registrations)
+          .innerJoin(participants, eq(participants.id, registrations.participantId))
+          .where(inArray(registrations.activityId, compIds))
+      : Promise.resolve([]),
+  ]);
   const names = await sideNameMap(allMatches);
 
   // Entrants per activity: teams (team-based) or registered participants.
   const entrants = new Map<string, { id: string; name: string; type: "team" | "participant" }[]>();
   for (const c of comps) {
     if (c.teamBased) {
-      const ts = await db.select({ id: teams.id, name: teams.name }).from(teams).where(eq(teams.activityId, c.id));
-      entrants.set(c.id, ts.map((t) => ({ ...t, type: "team" as const })));
+      entrants.set(
+        c.id,
+        allTeams
+          .filter((t) => t.activityId === c.id)
+          .map((t) => ({ id: t.id, name: t.name, type: "team" as const })),
+      );
     } else {
-      const ps = await db
-        .select({ id: participants.id, name: participants.name })
-        .from(registrations)
-        .innerJoin(participants, eq(participants.id, registrations.participantId))
-        .where(eq(registrations.activityId, c.id));
-      entrants.set(c.id, ps.map((p) => ({ ...p, type: "participant" as const })));
+      entrants.set(
+        c.id,
+        allRegs
+          .filter((r) => r.activityId === c.id)
+          .map((r) => ({ id: r.participantId, name: r.name, type: "participant" as const })),
+      );
     }
   }
 
@@ -52,7 +75,7 @@ export default async function MatchesPage() {
       </div>
 
       {comps.length === 0 && (
-        <p className="text-sm text-muted-foreground">No competitive activities yet.</p>
+        <p className="text-sm text-muted-foreground">No activities yet.</p>
       )}
 
       {comps.map((c) => {

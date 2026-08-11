@@ -1,5 +1,6 @@
 import "server-only";
 import { and, eq, sql } from "drizzle-orm";
+import { type RegistrationTarget } from "./registration-targets";
 import { db } from "@/db";
 import { events } from "@/db/schema";
 
@@ -9,9 +10,7 @@ export function hasEnded(endDate: string | null): boolean {
   return !!endDate && endDate < new Date().toISOString().slice(0, 10);
 }
 
-// Fixed vocabulary of who may self-register for an event (registerableBy).
-export const REGISTRATION_TARGETS = ["delegation", "host_student", "visitor"] as const;
-export type RegistrationTarget = (typeof REGISTRATION_TARGETS)[number];
+export { REGISTRATION_TARGETS, type RegistrationTarget } from "./registration-targets";
 
 const targetMatch = (target: RegistrationTarget) =>
   sql`${events.registerableBy} ? ${target}`; // jsonb array "contains string"

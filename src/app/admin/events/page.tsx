@@ -3,12 +3,13 @@ import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { events } from "@/db/schema";
 import { requirePermission } from "@/lib/auth";
-import { createEvent, setEventStatus } from "@/lib/event-actions";
+import { setEventStatus } from "@/lib/event-actions";
 import { hasEnded } from "@/lib/event";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input, Label } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/badge";
+import { NewEventDialog } from "@/components/admin/new-event-dialog";
 
 const NEXT: Record<string, { to: string; label: string }> = {
   draft: { to: "open", label: "Open for registration" },
@@ -16,8 +17,21 @@ const NEXT: Record<string, { to: string; label: string }> = {
   closed: { to: "open", label: "Reopen" },
 };
 
-export default async function EventsPage() {
+const TABS = [
+  { status: undefined, label: "All" },
+  { status: "open", label: "Open" },
+  { status: "closed", label: "Closed" },
+  { status: "draft", label: "Draft" },
+];
+
+export default async function EventsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string }>;
+}) {
   await requirePermission("event.manage");
+  const { status } = await searchParams;
+  const tab = TABS.some((t) => t.status === status) ? status : undefined;
 
   // Self-heal: an event left "open" past its end date is no longer offered for
   // registration (see openEventsFor) — flip its stored status to match reality.
@@ -32,15 +46,60 @@ export default async function EventsPage() {
       ),
     );
 
-  const rows = await db.select().from(events).orderBy(events.createdAt);
+  const rows = tab
+    ? await db.select().from(events).where(eq(events.status, tab)).orderBy(events.createdAt)
+    : await db.select().from(events).orderBy(events.createdAt);
+
+  const counts = await db
+    .select({ status: events.status, n: sql<number>`count(*)::int` })
+    .from(events)
+    .groupBy(events.status);
+  const byStatus = new Map(counts.map((c) => [c.status, c.n]));
+  const total = [...byStatus.values()].reduce((a, b) => a + b, 0);
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Events</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Only events set to “open” appear in delegation registration.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Events</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Only events set to “open” appear in delegation registration.
+          </p>
+        </div>
+        <NewEventDialog />
+      </div>
+
+      {/* Status filter tabs */}
+      <div className="flex items-center gap-1 border-b border-border" role="tablist">
+        {TABS.map((t) => {
+          const active = tab === t.status;
+          return (
+            <Link
+              key={t.label}
+              href={t.status ? `/admin/events?status=${t.status}` : "/admin/events"}
+              role="tab"
+              aria-selected={active}
+              className={cn(
+                "-mb-px flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors",
+                active
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {t.label}
+              <span
+                className={cn(
+                  "rounded-full px-1.5 py-0.5 text-xs tabular-nums",
+                  active
+                    ? "bg-primary-tint text-primary"
+                    : "bg-surface-muted text-muted-foreground",
+                )}
+              >
+                {t.status ? (byStatus.get(t.status) ?? 0) : total}
+              </span>
+            </Link>
+          );
+        })}
       </div>
 
       <div className="space-y-3">
@@ -87,35 +146,6 @@ export default async function EventsPage() {
           <p className="text-sm text-muted-foreground">No events yet.</p>
         )}
       </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>New event</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form action={createEvent} className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="name">Name</Label>
-                <Input id="name" name="name" placeholder="Spring Sports Meet 2026" required />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="type">Type</Label>
-                <Input id="type" name="type" placeholder="Sports / Gala / …" />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="startDate">Start date</Label>
-                <Input id="startDate" name="startDate" type="date" />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="endDate">End date</Label>
-                <Input id="endDate" name="endDate" type="date" />
-              </div>
-            </div>
-            <Button>Create event</Button>
-          </form>
-        </CardContent>
-      </Card>
     </div>
   );
 }

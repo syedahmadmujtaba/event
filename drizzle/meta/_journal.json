@@ -64,6 +64,20 @@
       "when": 1785744292369,
       "tag": "0008_powerful_wallow",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1786433135101,
+      "tag": "0009_drop_activity_kind_fee_day",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1786436997750,
+      "tag": "0010_clear_mad_thinker",
+      "breakpoints": true
     }
   ]
 }

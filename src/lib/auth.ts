@@ -1,10 +1,11 @@
 import "server-only";
 import { cookies } from "next/headers";
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { randomBytes } from "crypto";
-import { and, eq, gt } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { sessions, users, userRoles, roles } from "@/db/schema";
+import { sessions, users } from "@/db/schema";
 import type { Permission } from "./permissions";
 
 const COOKIE = "session";
@@ -37,31 +38,34 @@ export async function destroySession() {
   store.delete(COOKIE);
 }
 
-export async function getCurrentUser(): Promise<CurrentUser | null> {
+// cache() memoizes within one request, so the layout + page that both call
+// auth share a single lookup instead of doubling the DB round trips.
+export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   const token = (await cookies()).get(COOKIE)?.value;
   if (!token) return null;
 
-  const [row] = await db
-    .select({ id: users.id, email: users.email, name: users.name })
-    .from(sessions)
-    .innerJoin(users, eq(users.id, sessions.userId))
-    .where(and(eq(sessions.token, token), gt(sessions.expiresAt, new Date())));
+  // One round trip: session + user + union of permission strings across roles
+  // (lateral flattens each role's jsonb permission array).
+  const result = await db.execute(sql`
+    select u.id, u.email, u.name,
+      coalesce(array_agg(p.p) filter (where p.p is not null), '{}'::text[]) as permissions
+    from sessions s
+    join users u on u.id = s.user_id
+    left join user_roles ur on ur.user_id = u.id
+    left join roles r on r.id = ur.role_id
+    left join lateral jsonb_array_elements_text(r.permissions) as p(p) on true
+    where s.token = ${token} and s.expires_at > now()
+    group by u.id, u.email, u.name
+  `);
+  const row = result.rows[0] as
+    | { id: string; email: string; name: string; permissions: string[] }
+    | undefined;
   if (!row) return null;
 
-  // Union permissions across all the user's roles (global + event-scoped).
-  const roleRows = await db
-    .select({ permissions: roles.permissions })
-    .from(userRoles)
-    .innerJoin(roles, eq(roles.id, userRoles.roleId))
-    .where(eq(userRoles.userId, row.id));
-
   const permissions = new Set<Permission>();
-  for (const r of roleRows) {
-    for (const p of r.permissions) permissions.add(p as Permission);
-  }
-
-  return { ...row, permissions };
-}
+  for (const p of row.permissions) permissions.add(p as Permission);
+  return { id: row.id, email: row.email, name: row.name, permissions };
+});
 
 export function can(user: CurrentUser, permission: Permission) {
   return user.permissions.has(permission);

@@ -145,7 +145,6 @@ export default async function StudentPage() {
                     {evFees.map((f) => (
                       <Badge key={f.id} tone="neutral">
                         Fee: Rs {f.amount.toLocaleString()}
-                        {f.day > 0 ? ` (day ${f.day})` : ""}
                       </Badge>
                     ))}
                     {pay && (

@@ -62,9 +62,9 @@ export default async function EventActivitiesPage({
             <CardContent className="flex items-center justify-between py-3">
               <div className="flex items-center gap-2">
                 <span className="font-medium">{a.name}</span>
-                <Badge tone={a.kind === "competitive" ? "brand" : "neutral"}>
-                  {a.kind === "competitive" ? "Competitive" : "Non-competitive"}
-                </Badge>
+                {a.price > 0 && (
+                  <Badge tone="neutral">Rs {a.price.toLocaleString()}</Badge>
+                )}
                 {a.teamBased && <Badge tone="info">Team-based</Badge>}
               </div>
               <form action={deleteActivity}>
@@ -95,15 +95,8 @@ export default async function EventActivitiesPage({
                 <Input id="name" name="name" placeholder="100m Sprint / Gala" required />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="kind">Kind</Label>
-                <select
-                  id="kind"
-                  name="kind"
-                  className="h-10 w-full rounded-lg border border-border bg-surface px-3 text-sm outline-none focus-visible:border-primary"
-                >
-                  <option value="competitive">Competitive</option>
-                  <option value="noncompetitive">Non-competitive</option>
-                </select>
+                <Label htmlFor="price">Price (Rs)</Label>
+                <Input id="price" name="price" type="number" min={0} defaultValue={0} placeholder="0 = free" />
               </div>
             </div>
             <label className="flex items-center gap-2 text-sm">
@@ -184,7 +177,6 @@ export default async function EventActivitiesPage({
               <span>
                 {PAYER_LABELS[f.payerType] ?? f.payerType} ·{" "}
                 <span className="font-medium">Rs {f.amount.toLocaleString()}</span>
-                {f.day > 0 && <span className="text-muted-foreground"> · day {f.day}</span>}
               </span>
               <form action={deleteFeeRule}>
                 <input type="hidden" name="ruleId" value={f.id} />
@@ -218,13 +210,9 @@ export default async function EventActivitiesPage({
               <Label htmlFor="amount">Amount (Rs)</Label>
               <Input id="amount" name="amount" type="number" min={0} required className="w-32" />
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="day">Day</Label>
-              <Input id="day" name="day" type="number" min={0} defaultValue={0} className="w-20" />
-            </div>
             <Button size="sm">Add / update</Button>
           </form>
-          <p className="text-xs text-muted-foreground">Day 0 = flat event fee; 1, 2… for per-day fees.</p>
+          <p className="text-xs text-muted-foreground">One flat fee per payer type for this event.</p>
         </CardContent>
       </Card>
     </div>
