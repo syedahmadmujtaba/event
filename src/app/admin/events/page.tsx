@@ -10,6 +10,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/badge";
 import { NewEventDialog } from "@/components/admin/new-event-dialog";
+import { EditEventDialog } from "@/components/admin/edit-event-dialog";
+import { DeleteEventButton } from "@/components/admin/delete-event-button";
 
 const NEXT: Record<string, { to: string; label: string }> = {
   draft: { to: "open", label: "Open for registration" },
@@ -137,6 +139,19 @@ export default async function EventsPage({
                       </Button>
                     </form>
                   )}
+                  <EditEventDialog
+                    event={{
+                      id: e.id,
+                      name: e.name,
+                      type: e.type,
+                      startDate: e.startDate,
+                      endDate: e.endDate,
+                      status: e.status,
+                      registerableBy: e.registerableBy ?? [],
+                      maxActivitiesPerParticipant: e.maxActivitiesPerParticipant,
+                    }}
+                  />
+                  <DeleteEventButton eventId={e.id} name={e.name} />
                 </div>
               </CardContent>
             </Card>

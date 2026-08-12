@@ -10,12 +10,14 @@ import {
   userRoles,
   schools,
   delegationRegistrations,
+  payments,
 } from "@/db/schema";
 import { hashPassword } from "./password";
 import { requirePermission } from "./auth";
 import { createVerificationUrl } from "./email-verification";
 import { sendMail } from "./mailer";
 import { eventOpenFor } from "./event";
+import { issueForDelegation } from "./credentials";
 import type { AuthState } from "./auth-actions";
 
 /** Public delegation self-registration for one open event (FR-4). */
@@ -105,6 +107,19 @@ export async function approveDelegation(formData: FormData) {
     .where(eq(delegationRegistrations.id, id));
   if (!reg || reg.status !== "pending") return;
 
+  // The delegation registration fee slip must be submitted before approval.
+  const [pay] = await db
+    .select({ id: payments.id })
+    .from(payments)
+    .where(
+      and(
+        eq(payments.payerType, "delegation_registration"),
+        eq(payments.payerId, id),
+        eq(payments.status, "submitted"),
+      ),
+    );
+  if (!pay) return;
+
   const [coordRole] = await db
     .select({ id: roles.id })
     .from(roles)
@@ -114,6 +129,15 @@ export async function approveDelegation(formData: FormData) {
     .update(delegationRegistrations)
     .set({ status: "approved", reviewedBy: admin.id, reviewedAt: new Date() })
     .where(eq(delegationRegistrations.id, id));
+
+  // Approving the registration approves the registration fee in the same step.
+  await db
+    .update(payments)
+    .set({ status: "approved", reviewedBy: admin.id, reviewedAt: new Date() })
+    .where(eq(payments.id, pay.id));
+
+  // Mint QR credentials (delegation card; participant cards as students are added).
+  await issueForDelegation(id);
 
   if (coordRole) {
     // Event-scoped coordinator role. onConflictDoNothing: safe on re-approve.
@@ -135,10 +159,11 @@ export async function approveDelegation(formData: FormData) {
     sendMail(
       coord.email,
       "Your delegation is approved",
-      `<p>Your delegation has been approved. You can now register students.</p>`,
+      `<p>Your delegation has been approved and your registration fee has been verified. You can now register students.</p>`,
     );
   }
   revalidatePath("/admin/delegations");
+  revalidatePath("/delegation");
 }
 
 export async function rejectDelegation(formData: FormData) {

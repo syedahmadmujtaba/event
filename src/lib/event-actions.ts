@@ -103,6 +103,58 @@ export async function setEventStatus(formData: FormData) {
   revalidatePath("/admin/events");
 }
 
+/** Edit an event's details (name, dates, status, cap, registration targets). */
+export async function updateEvent(formData: FormData) {
+  await requirePermission("event.manage");
+  const id = String(formData.get("eventId") ?? "");
+  const [ev] = await db.select({ id: events.id }).from(events).where(eq(events.id, id));
+  if (!ev) return;
+
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) return;
+
+  const status = STATUSES.has(String(formData.get("status") ?? ""))
+    ? String(formData.get("status"))
+    : "draft";
+  const rawCap = String(formData.get("maxActivitiesPerParticipant") ?? "").trim();
+  const cap = rawCap === "" ? null : Math.max(1, Math.trunc(Number(rawCap)));
+  const targets = formData
+    .getAll("target")
+    .map(String)
+    .filter((t) => TARGETS.has(t));
+
+  if (status === "open") {
+    const [cur] = await db
+      .select({ endDate: events.endDate })
+      .from(events)
+      .where(eq(events.id, id));
+    if (!cur || hasEnded(cur.endDate)) return;
+  }
+
+  await db
+    .update(events)
+    .set({
+      name,
+      type: String(formData.get("type") ?? "").trim() || null,
+      startDate: String(formData.get("startDate") ?? "") || null,
+      endDate: String(formData.get("endDate") ?? "") || null,
+      status,
+      registerableBy: targets,
+      maxActivitiesPerParticipant: cap !== null && Number.isFinite(cap) ? cap : null,
+    })
+    .where(eq(events.id, id));
+  revalidatePath("/admin/events");
+  revalidatePath(`/admin/events/${id}`);
+}
+
+/** Delete an event. All dependent rows cascade (activities, fee rules, etc.). */
+export async function deleteEvent(formData: FormData) {
+  await requirePermission("event.manage");
+  const id = String(formData.get("eventId") ?? "");
+  await db.delete(events).where(eq(events.id, id));
+  revalidatePath("/admin/events");
+}
+
 export async function createActivity(formData: FormData) {
   await requirePermission("event.manage");
   const eventId = String(formData.get("eventId") ?? "");

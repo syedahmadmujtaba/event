@@ -13,6 +13,7 @@ import {
 } from "@/db/schema";
 import { requireUser } from "./auth";
 import { atActivityCap } from "./registration";
+import { issueParticipant } from "./credentials";
 
 // The one ownership gate: caller must be the coordinator of this APPROVED
 // registration. Returns {schoolId, eventId} or null — every action bails on null.
@@ -76,6 +77,9 @@ export async function registerParticipant(formData: FormData) {
     .insert(registrations)
     .values({ participantId, activityId })
     .onConflictDoNothing();
+  // Delegation fee is approved at registration approval; mint the student's
+  // credential here so cards exist as soon as they're registered (idempotent).
+  await issueParticipant(participantId, reg.eventId);
   revalidatePath("/delegation");
 }
 

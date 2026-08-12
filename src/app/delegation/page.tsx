@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import {
   delegationRegistrations,
@@ -20,7 +20,7 @@ import {
   createTeam,
   addTeamMember,
 } from "@/lib/coordinator-actions";
-import { submitDelegationPayment } from "@/lib/payment-actions";
+import { submitDelegationPayment, deleteDelegationPayment } from "@/lib/payment-actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -113,6 +113,20 @@ export default async function DelegationPage() {
     ),
   );
 
+  // Pending registrations: their registration-fee rule + latest slip, so the
+  // coordinator can upload the slip before the admin approves.
+  const pendingRegs = regs.filter((r) => r.status === "pending");
+  const [pendingFees, pendingPays] = pendingRegs.length
+    ? await Promise.all([
+        db.select().from(eventFeeRules).where(inArray(eventFeeRules.eventId, pendingRegs.map((r) => r.eventId))),
+        db
+          .select()
+          .from(payments)
+          .where(and(eq(payments.payerType, "delegation_registration"), inArray(payments.payerId, pendingRegs.map((r) => r.id))))
+          .orderBy(desc(payments.createdAt)),
+      ])
+    : [[], []];
+
   if (regs.length === 0) {
     return (
       <p className="mx-auto max-w-2xl text-sm text-muted-foreground">
@@ -127,17 +141,75 @@ export default async function DelegationPage() {
 
       {regs.map((r) => {
         if (r.status !== "approved") {
+          const fee = pendingFees.find(
+            (f) => f.eventId === r.eventId && f.payerType === "delegation_registration",
+          );
+          const latestPay = pendingPays.find((p) => p.payerId === r.id);
           return (
             <Card key={r.id}>
-              <CardContent className="flex items-center justify-between py-4">
-                <div>
-                  <p className="font-medium">{r.school}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {r.event}
-                    {r.status === "rejected" && r.reason ? ` — ${r.reason}` : ""}
-                  </p>
+              <CardContent className="py-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium">{r.school}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {r.event}
+                      {r.status === "rejected" && r.reason ? ` — ${r.reason}` : ""}
+                    </p>
+                  </div>
+                  <StatusBadge status={r.status} />
                 </div>
-                <StatusBadge status={r.status} />
+
+                {r.status === "pending" && (
+                  <div className="mt-4 space-y-3 border-t border-border pt-3">
+                    {fee && (
+                      <Badge tone="neutral">
+                        Registration fee: Rs {fee.amount.toLocaleString()}
+                      </Badge>
+                    )}
+                    {latestPay && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="text-muted-foreground">Latest slip:</span>
+                        <StatusBadge status={latestPay.status} />
+                        {latestPay.status === "rejected" &&
+                          latestPay.rejectionReason && (
+                            <span className="text-muted-foreground">
+                              — {latestPay.rejectionReason}
+                            </span>
+                          )}
+                      </div>
+                    )}
+                    {latestPay?.status !== "approved" && (
+                      <div className="flex flex-wrap items-center gap-2">
+                        {latestPay?.status === "submitted" && (
+                          <form action={deleteDelegationPayment}>
+                            <input type="hidden" name="regId" value={r.id} />
+                            <Button size="sm" variant="outline">
+                              Delete slip
+                            </Button>
+                          </form>
+                        )}
+                        <form
+                          action={submitDelegationPayment}
+                          className="flex flex-wrap items-center gap-2"
+                        >
+                          <input type="hidden" name="regId" value={r.id} />
+                          <input
+                            type="file"
+                            name="slip"
+                            accept="image/png,image/jpeg,image/webp,application/pdf"
+                            required
+                            className="text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-primary-tint file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-primary"
+                          />
+                          <Button size="sm">Upload slip</Button>
+                        </form>
+                      </div>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      Upload your registration fee slip — the host school reviews
+                      it before approving your delegation.
+                    </p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           );
@@ -311,8 +383,16 @@ export default async function DelegationPage() {
                   </div>
                 )}
 
-                {b.latestPayment?.status !== "submitted" &&
-                  b.latestPayment?.status !== "approved" && (
+                {b.latestPayment?.status !== "approved" && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {b.latestPayment?.status === "submitted" && (
+                      <form action={deleteDelegationPayment}>
+                        <input type="hidden" name="regId" value={r.id} />
+                        <Button size="sm" variant="outline">
+                          Delete slip
+                        </Button>
+                      </form>
+                    )}
                     <form action={submitDelegationPayment} className="flex flex-wrap items-center gap-2">
                       <input type="hidden" name="regId" value={r.id} />
                       <input
@@ -324,7 +404,8 @@ export default async function DelegationPage() {
                       />
                       <Button size="sm">Upload slip</Button>
                     </form>
-                  )}
+                  </div>
+                )}
               </section>
 
               {/* Issued credentials (FR-17) */}

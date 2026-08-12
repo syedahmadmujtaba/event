@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { payments, delegationRegistrations, schools, events, participants, visitorTickets, visitors } from "@/db/schema";
+import { payments, participants, events, visitorTickets, visitors } from "@/db/schema";
 import { requirePermission } from "@/lib/auth";
 import { approvePayment, rejectPayment } from "@/lib/payment-actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,15 +13,9 @@ export const dynamic = "force-dynamic";
 export default async function PaymentsPage() {
   await requirePermission("payment.verify");
 
-  // Submitted payments awaiting verification, across payer types.
-  const [delegationRows, participantRows, visitorRows] = await Promise.all([
-    db
-      .select({ id: payments.id, createdAt: payments.createdAt, who: schools.name, event: events.name })
-      .from(payments)
-      .innerJoin(delegationRegistrations, eq(delegationRegistrations.id, payments.payerId))
-      .innerJoin(schools, eq(schools.id, delegationRegistrations.schoolId))
-      .innerJoin(events, eq(events.id, delegationRegistrations.eventId))
-      .where(and(eq(payments.status, "submitted"), eq(payments.payerType, "delegation_registration"))),
+  // Submitted payments awaiting verification. Delegation registration fees are
+  // verified as part of delegation approval, so they never reach this queue.
+  const [participantRows, visitorRows] = await Promise.all([
     db
       .select({ id: payments.id, createdAt: payments.createdAt, who: participants.name, event: events.name })
       .from(payments)
@@ -36,7 +30,7 @@ export default async function PaymentsPage() {
       .innerJoin(events, eq(events.id, payments.eventId))
       .where(and(eq(payments.status, "submitted"), eq(payments.payerType, "visitor_ticket"))),
   ]);
-  const rows = [...delegationRows, ...participantRows, ...visitorRows];
+  const rows = [...participantRows, ...visitorRows];
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">

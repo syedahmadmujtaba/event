@@ -1,24 +1,26 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, ne } from "drizzle-orm";
 import { db } from "@/db";
 import { payments, delegationRegistrations, users, visitorTickets, visitors } from "@/db/schema";
 import { requireUser, requirePermission } from "./auth";
-import { uploadSlip } from "./storage";
+import { uploadSlip, deleteStored } from "./storage";
 import { sendMail, sendWhatsApp } from "./mailer";
 import { issueForDelegation, issueParticipant, issueVisitor } from "./credentials";
 
 const ALLOWED = new Set(["image/png", "image/jpeg", "image/webp", "application/pdf"]);
 const MAX_BYTES = 5 * 1024 * 1024;
 
-/** Coordinator uploads a payment slip for their own approved delegation (FR-13). */
+/** Coordinator uploads a payment slip for their own delegation (FR-13).
+ *  Allowed while pending (so the admin reviews slip + registration together)
+ *  and after approval. Re-uploads just create a newer row; latest wins. */
 export async function submitDelegationPayment(formData: FormData) {
   const user = await requireUser();
   const regId = String(formData.get("regId") ?? "");
   const file = formData.get("slip");
 
-  // Ownership: must be the coordinator of this approved registration.
+  // Ownership: must be the coordinator of this non-rejected registration.
   const [reg] = await db
     .select({ id: delegationRegistrations.id })
     .from(delegationRegistrations)
@@ -26,7 +28,7 @@ export async function submitDelegationPayment(formData: FormData) {
       and(
         eq(delegationRegistrations.id, regId),
         eq(delegationRegistrations.coordinatorUserId, user.id),
-        eq(delegationRegistrations.status, "approved"),
+        ne(delegationRegistrations.status, "rejected"),
       ),
     );
   if (!reg) return;
@@ -43,6 +45,46 @@ export async function submitDelegationPayment(formData: FormData) {
     slipRef,
   });
   revalidatePath("/delegation");
+  revalidatePath("/admin/delegations");
+}
+
+/** Coordinator removes the latest pending slip for their own delegation, so they
+ *  can replace it before the admin approves (delete-and-reupload). Once a slip
+ *  is approved (or its delegation is), it can no longer be deleted. */
+export async function deleteDelegationPayment(formData: FormData) {
+  const user = await requireUser();
+  const regId = String(formData.get("regId") ?? "");
+
+  const [reg] = await db
+    .select({ id: delegationRegistrations.id })
+    .from(delegationRegistrations)
+    .where(
+      and(
+        eq(delegationRegistrations.id, regId),
+        eq(delegationRegistrations.coordinatorUserId, user.id),
+        ne(delegationRegistrations.status, "rejected"),
+      ),
+    );
+  if (!reg) return;
+
+  const [pay] = await db
+    .select()
+    .from(payments)
+    .where(
+      and(
+        eq(payments.payerType, "delegation_registration"),
+        eq(payments.payerId, regId),
+        eq(payments.status, "submitted"),
+      ),
+    )
+    .orderBy(desc(payments.createdAt))
+    .limit(1);
+  if (!pay) return;
+
+  await db.delete(payments).where(eq(payments.id, pay.id));
+  await deleteStored(pay.slipRef);
+  revalidatePath("/delegation");
+  revalidatePath("/admin/delegations");
 }
 
 async function decide(paymentId: string, status: "approved" | "rejected", reason?: string) {
