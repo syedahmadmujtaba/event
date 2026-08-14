@@ -7,14 +7,14 @@ import path from "path";
 // through the permission-gated /admin/payments/[id]/slip route — never a
 // public URL.
 //
-// Default: a gitignored .uploads/ dir on disk, streamed by getSlip. This is
-// the verified-working path in every environment.
+// Default: a gitignored .uploads/ dir on disk, streamed by getSlip. Only safe
+// on a writable filesystem — serverless roots (e.g. /var/task) are read-only,
+// so production must use Cloudinary.
 //
-// Cloudinary (type: authenticated + signed delivery URL) is OFF by default:
-// live-creds testing on 2026-08-12 showed the signing algorithm (and even the
-// account's own admin-produced secure_url) returns 401, so serving through it
-// is broken until the account delivery config is fixed. Opt in deliberately
-// with CLOUDINARY_ENABLED=1 once that is confirmed.
+// Cloudinary (type: authenticated + signed delivery URL) is the production
+// path, enabled with CLOUDINARY_ENABLED=1. The signed-URL 401s seen earlier
+// were a bug in the delivery signature (it must cover `public_id.format` +
+// secret, not just the public_id) — fixed below; the account config was fine.
 
 const CLOUD = process.env.CLOUDINARY_CLOUD_NAME;
 const KEY = process.env.CLOUDINARY_API_KEY;
@@ -99,9 +99,11 @@ export async function getSlip(
   if (ref.startsWith("cloudinary:") && CLOUD && SECRET) {
     const [, resourceType, format, ...rest] = ref.split(":");
     const publicId = rest.join(":");
-    // Signed authenticated delivery URL: s--<sha1(public_id+secret)[0:8] b64url>--
+    // Signed authenticated delivery URL: s--<sha1(public_id.format+secret)[0:8] b64url>--
+    // Per Cloudinary's delivery-URL signing, the hash covers the public ID with
+    // its file extension (the components after the signature), then the secret.
     const sig = createHash("sha1")
-      .update(publicId + SECRET)
+      .update(`${publicId}.${format}${SECRET}`)
       .digest("base64")
       .replace(/\+/g, "-")
       .replace(/\//g, "_")
