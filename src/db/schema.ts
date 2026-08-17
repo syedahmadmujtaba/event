@@ -214,11 +214,17 @@ export const participants = pgTable("participants", {
     .notNull()
     .references(() => schools.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
-  detail: text("detail"), // class / roll no / free-form
+  idNumber: text("id_number"), // CNIC / smart card / B-form
+  gender: text("gender"), // male | female
+  dob: date("dob"), // date of birth (YYYY-MM-DD); age derived from it
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
-});
+}, (t) => [
+  // A national ID (CNIC / smart card / B-form) is unique per person; NULLs
+  // (legacy rows without one) are allowed to repeat in Postgres.
+  unique("participants_id_number_unique").on(t.idNumber),
+]);
 
 // Links a participant to an activity; drives the approval/payment pipeline (§8).
 export const registrations = pgTable(

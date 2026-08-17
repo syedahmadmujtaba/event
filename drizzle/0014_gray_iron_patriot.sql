@@ -1,0 +1,1 @@
+ALTER TABLE "participants" ADD CONSTRAINT "participants_id_number_unique" UNIQUE("id_number");

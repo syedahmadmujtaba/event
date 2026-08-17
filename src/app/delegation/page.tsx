@@ -15,12 +15,12 @@ import {
 } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
 import {
-  addParticipant,
-  registerParticipant,
   createTeam,
   addTeamMember,
 } from "@/lib/coordinator-actions";
 import { submitDelegationPayment, deleteDelegationPayment } from "@/lib/payment-actions";
+import { AddStudentForm } from "@/components/delegation/add-student-form";
+import { StudentList } from "@/components/delegation/student-list";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -136,7 +136,7 @@ export default async function DelegationPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="mx-auto max-w-6xl space-y-8 px-4 py-6">
       <h1 className="text-2xl font-bold tracking-tight">Your delegation</h1>
 
       {regs.map((r) => {
@@ -224,6 +224,16 @@ export default async function DelegationPage() {
         }
         const actName = new Map(b.acts.map((a) => [a.id, a.name]));
         const teamActs = b.acts.filter((a) => a.teamBased);
+        const gamesByStudent = Object.fromEntries(
+          b.parts.map((p) => [
+            p.id,
+            (regByPart.get(p.id) ?? []).map((rr) => ({
+              activityId: rr.activityId,
+              name: actName.get(rr.activityId) ?? rr.activityId,
+              status: rr.status,
+            })),
+          ]),
+        );
 
         return (
           <Card key={r.id}>
@@ -241,192 +251,168 @@ export default async function DelegationPage() {
               </div>
               <p className="text-sm text-muted-foreground">{r.event} · approved</p>
             </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Participants + their activity registrations */}
-              <section className="space-y-3">
-                <h3 className="text-sm font-semibold">Students</h3>
-                {b.parts.map((p) => (
-                  <div key={p.id} className="rounded-lg border border-border p-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">
-                        {p.name}
-                        {p.detail && (
-                          <span className="text-muted-foreground"> · {p.detail}</span>
-                        )}
-                      </span>
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {(regByPart.get(p.id) ?? []).map((rr) => (
-                        <span key={rr.activityId} className="inline-flex items-center gap-1">
-                          <Badge tone="neutral">{actName.get(rr.activityId)}</Badge>
-                          <StatusBadge status={rr.status} />
-                        </span>
+            <CardContent className="p-6 pt-0">
+              <div className="grid gap-8 lg:grid-cols-[1fr_360px]">
+                {/* Left: teams on top, then students */}
+                <div className="space-y-8">
+                  {/* Teams (team-based activities only) */}
+                  {teamActs.length > 0 && (
+                    <section className="space-y-4">
+                      <h3 className="text-sm font-semibold">Teams</h3>
+                      {b.teamRows.map((t) => (
+                        <div key={t.id} className="rounded-lg border border-border p-3">
+                          <p className="text-sm font-medium">
+                            {t.name}{" "}
+                            <span className="text-muted-foreground">
+                              · {actName.get(t.activityId)}
+                            </span>
+                          </p>
+                          <div className="mt-1 flex flex-wrap gap-1.5">
+                            {b.memberRows
+                              .filter((m) => m.teamId === t.id)
+                              .map((m, i) => (
+                                <Badge key={i} tone="neutral">
+                                  {m.name}
+                                </Badge>
+                              ))}
+                          </div>
+                          <form action={addTeamMember} className="mt-2 flex items-end gap-2">
+                            <input type="hidden" name="regId" value={r.id} />
+                            <input type="hidden" name="teamId" value={t.id} />
+                            <select
+                              name="participantId"
+                              required
+                              className="h-8 rounded-lg border border-border bg-surface px-2 text-sm outline-none focus-visible:border-primary"
+                            >
+                              {b.parts.map((p) => (
+                                <option key={p.id} value={p.id}>
+                                  {p.name}
+                                </option>
+                              ))}
+                            </select>
+                            <Button size="sm" variant="outline">
+                              Add member
+                            </Button>
+                          </form>
+                        </div>
                       ))}
-                    </div>
-                    {b.acts.length > 0 && (
-                      <form action={registerParticipant} className="mt-2 flex items-end gap-2">
+                      <form action={createTeam} className="flex flex-wrap items-end gap-2">
                         <input type="hidden" name="regId" value={r.id} />
-                        <input type="hidden" name="participantId" value={p.id} />
                         <select
                           name="activityId"
                           required
-                          className="h-8 rounded-lg border border-border bg-surface px-2 text-sm outline-none focus-visible:border-primary"
+                          className="h-9 rounded-lg border border-border bg-surface px-2 text-sm outline-none focus-visible:border-primary"
                         >
-                          {b.acts.map((a) => (
+                          {teamActs.map((a) => (
                             <option key={a.id} value={a.id}>
                               {a.name}
                             </option>
                           ))}
                         </select>
-                        <Button size="sm" variant="outline">
-                          Register
-                        </Button>
+                        <Input name="name" placeholder="Team name" className="h-9 w-48" required />
+                        <Button size="sm">Create team</Button>
                       </form>
-                    )}
-                  </div>
-                ))}
-                {b.parts.length === 0 && (
-                  <p className="text-sm text-muted-foreground">No students added yet.</p>
-                )}
-                <form action={addParticipant} className="flex flex-wrap items-end gap-2">
-                  <input type="hidden" name="regId" value={r.id} />
-                  <Input name="name" placeholder="Student name" className="h-9 w-48" required />
-                  <Input name="detail" placeholder="Class / roll (optional)" className="h-9 w-48" />
-                  <Button size="sm">Add student</Button>
-                </form>
-              </section>
+                    </section>
+                  )}
 
-              {/* Teams (team-based activities only) */}
-              {teamActs.length > 0 && (
-                <section className="space-y-3">
-                  <h3 className="text-sm font-semibold">Teams</h3>
-                  {b.teamRows.map((t) => (
-                    <div key={t.id} className="rounded-lg border border-border p-3">
-                      <p className="text-sm font-medium">
-                        {t.name}{" "}
-                        <span className="text-muted-foreground">
-                          · {actName.get(t.activityId)}
-                        </span>
-                      </p>
-                      <div className="mt-1 flex flex-wrap gap-1.5">
-                        {b.memberRows
-                          .filter((m) => m.teamId === t.id)
-                          .map((m, i) => (
-                            <Badge key={i} tone="neutral">
-                              {m.name}
+                  {/* Students */}
+                  <section className="space-y-4">
+                    <h3 className="text-sm font-semibold">Students</h3>
+                    <AddStudentForm regId={r.id} activities={b.acts.map((a) => ({ id: a.id, name: a.name }))} />
+                    {b.parts.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No students added yet.</p>
+                    ) : (
+                      <StudentList
+                        regId={r.id}
+                        students={b.parts.map((p) => ({
+                          id: p.id,
+                          name: p.name,
+                          gender: p.gender,
+                          idNumber: p.idNumber,
+                          dob: p.dob,
+                        }))}
+                        activities={b.acts.map((a) => ({ id: a.id, name: a.name }))}
+                        games={gamesByStudent}
+                      />
+                    )}
+                  </section>
+                </div>
+
+                {/* Right: payment + credentials */}
+                <aside className="space-y-8">
+                  {/* Payment (FR-13) */}
+                  <section className="space-y-4">
+                    <h3 className="text-sm font-semibold">Payment</h3>
+                    {b.feeRules.filter((f) => f.payerType in PAYER_LABELS).length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 text-sm">
+                        {b.feeRules
+                          .filter((f) => f.payerType in PAYER_LABELS)
+                          .map((f) => (
+                            <Badge key={f.id} tone="neutral">
+                              {PAYER_LABELS[f.payerType]}: Rs {f.amount.toLocaleString()}
                             </Badge>
                           ))}
                       </div>
-                      <form action={addTeamMember} className="mt-2 flex items-end gap-2">
-                        <input type="hidden" name="regId" value={r.id} />
-                        <input type="hidden" name="teamId" value={t.id} />
-                        <select
-                          name="participantId"
-                          required
-                          className="h-8 rounded-lg border border-border bg-surface px-2 text-sm outline-none focus-visible:border-primary"
-                        >
-                          {b.parts.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.name}
-                            </option>
-                          ))}
-                        </select>
-                        <Button size="sm" variant="outline">
-                          Add member
-                        </Button>
-                      </form>
-                    </div>
-                  ))}
-                  <form action={createTeam} className="flex flex-wrap items-end gap-2">
-                    <input type="hidden" name="regId" value={r.id} />
-                    <select
-                      name="activityId"
-                      required
-                      className="h-9 rounded-lg border border-border bg-surface px-2 text-sm outline-none focus-visible:border-primary"
-                    >
-                      {teamActs.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.name}
-                        </option>
-                      ))}
-                    </select>
-                    <Input name="name" placeholder="Team name" className="h-9 w-48" required />
-                    <Button size="sm">Create team</Button>
-                  </form>
-                </section>
-              )}
-
-              {/* Payment (FR-13) */}
-              <section className="space-y-3">
-                <h3 className="text-sm font-semibold">Payment</h3>
-                {b.feeRules.filter((f) => f.payerType in PAYER_LABELS).length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 text-sm">
-                    {b.feeRules
-                      .filter((f) => f.payerType in PAYER_LABELS)
-                      .map((f) => (
-                        <Badge key={f.id} tone="neutral">
-                          {PAYER_LABELS[f.payerType]}: Rs {f.amount.toLocaleString()}
-                        </Badge>
-                      ))}
-                  </div>
-                )}
-
-                {b.latestPayment && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <span className="text-muted-foreground">Latest slip:</span>
-                    <StatusBadge status={b.latestPayment.status} />
-                    {b.latestPayment.status === "rejected" && b.latestPayment.rejectionReason && (
-                      <span className="text-muted-foreground">
-                        — {b.latestPayment.rejectionReason}
-                      </span>
                     )}
-                  </div>
-                )}
 
-                {b.latestPayment?.status !== "approved" && (
-                  <div className="flex flex-wrap items-center gap-2">
-                    {b.latestPayment?.status === "submitted" && (
-                      <form action={deleteDelegationPayment}>
-                        <input type="hidden" name="regId" value={r.id} />
-                        <Button size="sm" variant="outline">
-                          Delete slip
-                        </Button>
-                      </form>
+                    {b.latestPayment && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="text-muted-foreground">Latest slip:</span>
+                        <StatusBadge status={b.latestPayment.status} />
+                        {b.latestPayment.status === "rejected" && b.latestPayment.rejectionReason && (
+                          <span className="text-muted-foreground">
+                            — {b.latestPayment.rejectionReason}
+                          </span>
+                        )}
+                      </div>
                     )}
-                    <form action={submitDelegationPayment} className="flex flex-wrap items-center gap-2">
-                      <input type="hidden" name="regId" value={r.id} />
-                      <input
-                        type="file"
-                        name="slip"
-                        accept="image/png,image/jpeg,image/webp,application/pdf"
-                        required
-                        className="text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-primary-tint file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-primary"
-                      />
-                      <Button size="sm">Upload slip</Button>
-                    </form>
-                  </div>
-                )}
-              </section>
 
-              {/* Issued credentials (FR-17) */}
-              {b.myCreds.length > 0 && (
-                <section className="space-y-2">
-                  <h3 className="text-sm font-semibold">Credentials</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {b.myCreds.map((c) => (
-                      <a
-                        key={c.token}
-                        href={`/credential/${c.token}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1 text-sm hover:border-primary hover:text-primary"
-                      >
-                        {c.name}
-                      </a>
-                    ))}
-                  </div>
-                </section>
-              )}
+                    {b.latestPayment?.status !== "approved" && (
+                      <div className="flex flex-wrap items-center gap-2">
+                        {b.latestPayment?.status === "submitted" && (
+                          <form action={deleteDelegationPayment}>
+                            <input type="hidden" name="regId" value={r.id} />
+                            <Button size="sm" variant="outline">
+                              Delete slip
+                            </Button>
+                          </form>
+                        )}
+                        <form action={submitDelegationPayment} className="flex flex-wrap items-center gap-2">
+                          <input type="hidden" name="regId" value={r.id} />
+                          <input
+                            type="file"
+                            name="slip"
+                            accept="image/png,image/jpeg,image/webp,application/pdf"
+                            required
+                            className="text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-primary-tint file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-primary"
+                          />
+                          <Button size="sm">Upload slip</Button>
+                        </form>
+                      </div>
+                    )}
+                  </section>
+
+                  {/* Issued credentials (FR-17) */}
+                  {b.myCreds.length > 0 && (
+                    <section className="space-y-3">
+                      <h3 className="text-sm font-semibold">Credentials</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {b.myCreds.map((c) => (
+                          <a
+                            key={c.token}
+                            href={`/credential/${c.token}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1 text-sm hover:border-primary hover:text-primary"
+                          >
+                            {c.name}
+                          </a>
+                        ))}
+                      </div>
+                    </section>
+                  )}
+                </aside>
+              </div>
             </CardContent>
           </Card>
         );
